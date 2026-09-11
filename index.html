@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบจัดการกองคลังเอกสาร — โรงน้ำดื่ม เฟรชชี่ วอเตอร์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.10.5/dist/sweetalert2.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --navy:#1a3f6f; --navy-dark:#122d50; --navy-light:#2a5a96;
+  --gold:#c9a227; --gold-light:#e6c85a; --gold-soft:#fbf5e2;
+  --bg:#eef2f7; --card:#ffffff; --text:#1a2540; --muted:#5a6b85;
+  --border:#d4dce8; --success:#0f7d56; --danger:#c0392b; --warning:#1a3f6f;
+  --shadow:0 2px 10px rgba(26,63,111,.08); --shadow-lg:0 10px 30px rgba(26,63,111,.18);
+  --radius:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Sarabun',sans-serif}
+body{background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+button{cursor:pointer;font-family:inherit;border:none}
+input,select,textarea{font-family:inherit;font-size:14px}
+a{text-decoration:none;color:inherit}
+
+/* Offline banner */
+#offlineBanner{position:fixed;inset:0;z-index:9999;background:rgba(176,20,30,.97);color:#fff;display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+#offlineBanner.show{display:flex}
+#offlineBanner .ico{width:70px;height:70px;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;margin-bottom:18px;animation:pulse 1.2s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+#offlineBanner h1{font-size:24px;margin-bottom:10px}
+#offlineBanner p{font-size:14px;opacity:.95;max-width:480px;line-height:1.7}
+#offlineBanner .reason{margin-top:14px;background:rgba(0,0,0,.25);padding:10px 18px;border-radius:8px;font-size:12.5px}
+
+#spinner{position:fixed;inset:0;z-index:9000;background:rgba(255,255,255,.6);display:none;align-items:center;justify-content:center}
+#spinner.show{display:flex}
+.spin{width:44px;height:44px;border:4px solid #d6e0ee;border-top-color:var(--navy);border-radius:50%;animation:rot .8s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* ===== Public Top Nav ===== */
+.pub-nav{background:linear-gradient(135deg,var(--navy-dark),var(--navy));color:#fff;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:64px;box-shadow:0 2px 12px rgba(0,0,0,.15);position:sticky;top:0;z-index:100}
+.pub-nav .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:16px}
+.pub-nav .brand .seal{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--navy-dark);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;border:2px solid #fff}
+.pub-nav .brand small{display:block;font-weight:400;font-size:11px;opacity:.85}
+.pub-nav .links{display:flex;gap:6px;align-items:center}
+.pub-nav .links button{background:transparent;color:#fff;padding:8px 16px;border-radius:6px;font-size:13.5px;font-weight:500;transition:.15s}
+.pub-nav .links button:hover{background:rgba(255,255,255,.15)}
+.pub-nav .links button.primary{background:var(--gold);color:var(--navy-dark);font-weight:700}
+.pub-nav .links button.primary:hover{background:var(--gold-light)}
+
+/* ===== Public Hero ===== */
+.hero{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);color:#fff;padding:44px 28px;text-align:center;position:relative;overflow:hidden}
+.hero::after{content:'';position:absolute;bottom:-60px;left:50%;transform:translateX(-50%);width:800px;height:120px;background:radial-gradient(ellipse,rgba(201,162,39,.25),transparent 70%)}
+.hero h1{font-size:28px;font-weight:800;margin-bottom:8px}
+.hero p{opacity:.9;font-size:14px;max-width:640px;margin:0 auto}
+.search-bar{max-width:640px;margin:24px auto 0;display:flex;gap:8px;position:relative;z-index:2}
+.search-bar input{flex:1;padding:13px 18px;border:none;border-radius:8px;font-size:14px;outline:none;box-shadow:var(--shadow-lg)}
+.search-bar button{padding:13px 26px;background:var(--gold);color:var(--navy-dark);border:none;border-radius:8px;font-weight:700;font-size:14px}
+
+/* ===== Public content ===== */
+.pub-content{max-width:1100px;margin:0 auto;padding:28px}
+.panel{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px;margin-bottom:20px}
+.panel h3{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:14px;padding-bottom:10px;border-bottom:2px solid var(--gold);display:inline-block}
+.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;min-width:760px}
+th{background:var(--navy);color:#fff;font-weight:600;font-size:12.5px;padding:11px 12px;text-align:left;white-space:nowrap}
+td{padding:11px 12px;border-top:1px solid var(--border);font-size:13px;vertical-align:middle}
+tr:nth-child(even) td{background:#f7f9fc}
+tr:hover td{background:#eef4fb}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:7px;font-weight:600;font-size:13.5px;transition:.15s}
+.btn-primary{background:var(--navy);color:#fff}
+.btn-primary:hover{background:var(--navy-dark)}
+.btn-gold{background:var(--gold);color:var(--navy-dark)}
+.btn-gold:hover{background:var(--gold-light)}
+.btn-outline{background:#fff;color:var(--navy);border:1.5px solid var(--navy)}
+.btn-outline:hover{background:#eef4fb}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:5px 11px;font-size:12px}
+.icon-btn{background:#eef2f7;border-radius:6px;padding:5px 8px;font-size:13px;color:var(--navy);margin:0 2px}
+.icon-btn:hover{background:var(--navy);color:#fff}
+.icon-btn.del:hover{background:var(--danger);color:#fff}
+.text-btn{background:none;color:var(--navy);font-weight:600;font-size:12.5px;padding:4px 8px;border-radius:5px}
+.text-btn:hover{background:#eef4fb}
+.text-btn.del{color:var(--danger)}
+
+/* ===== Footer ===== */
+.pub-footer{background:var(--navy-dark);color:#cdd8e8;padding:32px 28px 20px;margin-top:40px}
+.footer-grid{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1.5fr 1fr 1fr;gap:24px}
+.footer-grid h4{color:var(--gold-light);font-size:14px;margin-bottom:10px;font-weight:700}
+.footer-grid p,.footer-grid li{font-size:12.5px;line-height:1.9;list-style:none}
+.footer-bottom{max-width:1100px;margin:20px auto 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.15);text-align:center;font-size:11.5px;color:#8fa3bd}
+
+/* ===== App Shell (logged in) ===== */
+.app{display:none;min-height:100vh}
+.app.show{display:flex}
+.sidebar{width:232px;background:linear-gradient(180deg,var(--navy-dark),var(--navy));position:fixed;top:0;left:0;bottom:0;z-index:100;display:flex;flex-direction:column;transition:transform .3s;color:#fff}
+.sidebar-head{padding:16px 18px;border-bottom:1px solid rgba(255,255,255,.15);display:flex;align-items:center;gap:10px}
+.sidebar-head .seal{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--gold),var(--gold-light));color:var(--navy-dark);display:flex;align-items:center;justify-content:center;font-weight:800;flex-shrink:0}
+.sidebar-head .sysname{font-weight:700;font-size:13px;line-height:1.35}
+.sidebar-head .sysname small{display:block;font-weight:400;font-size:10.5px;opacity:.8}
+.side-menu{flex:1;overflow-y:auto;padding:10px 8px}
+.side-sec{font-size:10.5px;color:var(--gold-light);padding:12px 12px 5px;text-transform:uppercase;letter-spacing:.8px;font-weight:700}
+.side-item{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:7px;color:#d6e0ee;font-weight:500;cursor:pointer;margin-bottom:2px;font-size:13px;transition:.15s}
+.side-item:hover{background:rgba(255,255,255,.1)}
+.side-item.active{background:var(--gold);color:var(--navy-dark);font-weight:700}
+.side-item .ic{width:18px;text-align:center;font-size:15px}
+.side-foot{padding:12px;border-top:1px solid rgba(255,255,255,.15)}
+.user-chip{display:flex;align-items:center;gap:10px;padding:6px}
+.user-chip .av{width:34px;height:34px;border-radius:50%;background:var(--gold);color:var(--navy-dark);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0}
+.user-chip .info{flex:1;min-width:0}
+.user-chip .info b{display:block;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-chip .info span{font-size:10.5px;opacity:.75}
+.main{flex:1;margin-left:232px;display:flex;flex-direction:column;min-width:0;min-height:100vh}
+.topbar{background:#fff;border-bottom:1px solid var(--border);padding:10px 22px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50}
+.hamburger{display:none;background:none;font-size:20px;color:var(--navy);padding:4px 8px}
+.topbar h2{font-size:16px;font-weight:700;color:var(--navy);flex:1}
+.net-status{font-size:11.5px;padding:4px 10px;border-radius:20px;background:#e2f3ec;color:var(--success);font-weight:600}
+.net-status.off{background:#fbe4e2;color:var(--danger)}
+.notif-btn{position:relative;background:#eef2f7;border-radius:8px;padding:7px 12px;font-size:13px;color:var(--navy);font-weight:600}
+.notif-badge{position:absolute;top:-6px;right:-6px;min-width:20px;height:20px;border-radius:10px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff}
+.content{padding:22px;flex:1}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:90}
+.overlay.show{display:block}
+
+/* Stats cards — สี่เหลี่ยมโค้งมน ดูมีมิติ */
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.stat-card{background:linear-gradient(145deg,#ffffff,#f0f4fa);border-radius:14px;padding:18px;box-shadow:4px 4px 12px rgba(26,63,111,.10),-2px -2px 8px rgba(255,255,255,.8);border-top:4px solid var(--navy);cursor:pointer;transition:.2s}
+.stat-card:hover{transform:translateY(-3px);box-shadow:6px 8px 18px rgba(26,63,111,.16)}
+.stat-card.gold{border-top-color:var(--gold)}
+.stat-card.green{border-top-color:var(--success)}
+.stat-card.red{border-top-color:var(--danger)}
+.stat-card .lbl{font-size:12px;color:var(--muted);font-weight:600;margin-bottom:6px}
+.stat-card .num{font-size:26px;font-weight:800;color:var(--navy);line-height:1.1}
+.stat-card .sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+.filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
+.filters input,.filters select{padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;outline:none;width:100%;background:#fff}
+.filters input:focus,.filters select:focus{border-color:var(--navy)}
+.fg{margin-bottom:13px}
+.fg label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px;color:var(--text)}
+.fg input,.fg select,.fg textarea{width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;outline:none;background:#fff}
+.fg input:focus,.fg select:focus{border-color:var(--navy);box-shadow:0 0 0 3px rgba(26,63,111,.1)}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.form-grid .full{grid-column:1/-1}
+@media(max-width:560px){.form-grid{grid-template-columns:1fr}}
+
+/* Modal */
+.modal-mask{position:fixed;inset:0;background:rgba(12,25,45,.55);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:36px 14px;overflow-y:auto}
+.modal-mask.show{display:flex}
+.modal{background:#fff;border-radius:12px;width:100%;max-width:680px;box-shadow:var(--shadow-lg);animation:pop .25s ease;overflow:hidden}
+@keyframes pop{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.modal-head{background:linear-gradient(135deg,var(--navy),var(--navy-light));color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between}
+.modal-head.gold{background:linear-gradient(135deg,#8a6d14,var(--gold))}
+.modal-head h3{font-size:15px;font-weight:700}
+.modal-head .x{background:none;color:#fff;font-size:22px;cursor:pointer}
+.modal-body{padding:20px;max-height:72vh;overflow-y:auto}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;background:#f7f9fc}
+
+/* Dropzone */
+.dropzone{border:2px dashed var(--border);border-radius:9px;padding:24px;text-align:center;color:var(--muted);cursor:pointer;background:#fafbfd;transition:.2s}
+.dropzone.drag{border-color:var(--gold);background:var(--gold-soft);color:var(--navy)}
+.dropzone .big{font-size:30px;margin-bottom:6px;color:var(--navy)}
+.file-list{margin-top:10px;display:flex;flex-direction:column;gap:5px}
+.file-item{display:flex;align-items:center;gap:9px;padding:7px 11px;background:#eef4fb;border-radius:7px;font-size:12.5px}
+.file-item .rm{margin-left:auto;background:none;color:var(--danger);font-weight:700;cursor:pointer;font-size:15px}
+
+.preview-box{width:100%;height:68vh;border:1px solid var(--border);border-radius:8px;background:#f4f6fa;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.preview-box iframe,.preview-box img{width:100%;height:100%;border:none;object-fit:contain}
+.preview-box .unsup{text-align:center;padding:28px;color:var(--muted)}
+.preview-box .unsup .big{font-size:40px;margin-bottom:10px;color:var(--navy)}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:16px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+.tab{padding:9px 16px;background:none;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-2px;font-size:13px;border-radius:6px 6px 0 0}
+.tab.active{color:var(--navy);border-bottom-color:var(--gold);background:#fff}
+
+/* Employee photo circle */
+.emp-photo{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid var(--gold);flex-shrink:0;background:#eef4fb;display:inline-flex;align-items:center;justify-content:center;font-weight:700;color:var(--navy);font-size:14px}
+.emp-photo.lg{width:110px;height:110px;font-size:40px;border-width:3px}
+.emp-detail-head{display:flex;gap:20px;align-items:center;padding-bottom:16px;border-bottom:2px solid var(--gold);margin-bottom:16px;flex-wrap:wrap}
+.emp-detail-head .info h2{font-size:20px;color:var(--navy)}
+.emp-detail-head .info .pos{color:var(--gold);font-weight:700;font-size:14px;margin:4px 0}
+.emp-detail-head .info .meta{font-size:12.5px;color:var(--muted)}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:700px){.info-grid{grid-template-columns:1fr}}
+.info-block{background:#f7f9fc;border-radius:9px;padding:16px;border-left:4px solid var(--navy)}
+.info-block h4{font-size:13px;color:var(--navy);margin-bottom:10px;font-weight:700}
+.info-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--border);font-size:12.5px}
+.info-row:last-child{border:none}
+.info-row b{color:var(--text);font-weight:600}
+.info-row span{color:var(--muted)}
+
+/* Announcement */
+.announce-item{background:linear-gradient(90deg,#fff5f5,#fff);border-left:4px solid var(--danger);border-radius:8px;padding:12px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.announce-item .txt{flex:1;font-size:13.5px}
+.announce-item .time{font-size:11.5px;color:var(--muted)}
+.ack-list{font-size:11.5px;color:var(--muted);margin-top:6px}
+
+.chart-wrap{position:relative;height:320px}
+.empty{text-align:center;padding:36px;color:var(--muted)}
+.empty .big{font-size:36px;margin-bottom:8px;color:var(--border)}
+.mt{margin-top:12px}.mb{margin-bottom:12px}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.flex-between{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.text-muted{color:var(--muted);font-size:12px}
+.check-row{display:flex;align-items:center;gap:8px;padding:6px 0}
+.check-row input{width:16px;height:16px}
+.tag-list{display:flex;flex-wrap:wrap;gap:6px}
+.tag{background:#eef4fb;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:6px}
+.tag button{background:none;color:var(--danger);font-weight:700;cursor:pointer}
+
+@media(max-width:900px){
+  .sidebar{transform:translateX(-100%)}
+  .sidebar.open{transform:translateX(0);box-shadow:var(--shadow-lg)}
+  .main{margin-left:0}
+  .hamburger{display:block}
+  .content{padding:14px}
+  .footer-grid{grid-template-columns:1fr}
+  .pub-nav{padding:0 14px}
+  .pub-nav .brand{font-size:13px}
+  .pub-nav .links button{padding:6px 10px;font-size:12px}
+}
+@media print{
+  .sidebar,.topbar,.modal-foot,.no-print{display:none!important}
+  .main{margin-left:0}
+  body{background:#fff}
+}
+</style>
+</head>
+<body>
+
+<div id="offlineBanner">
+  <div class="ico">!</div>
+  <h1>ระบบไม่สามารถใช้งานได้ชั่วคราว</h1>
+  <p>ระบบนี้ออกแบบมาเพื่อบันทึกข้อมูลออนไลน์ลงฐานข้อมูลบน Hard Disk ของเซิร์ฟเวอร์เท่านั้น<br>หากอินเทอร์เน็ตหลุดขณะบันทึก อาจทำให้ข้อมูลสูญหายหรือเสียหายได้</p>
+  <div class="reason" id="offlineReason">สาเหตุ: การเชื่อมต่ออินเทอร์เน็ตขัดข้อง กรุณาตรวจสอบสัญญาณเครือข่าย</div>
+</div>
+<div id="spinner"><div class="spin"></div></div>
+
+<!-- ============ PUBLIC LANDING ============ -->
+<div id="pubView">
+  <nav class="pub-nav">
+    <div class="brand">
+      <div class="seal">น้ำ</div>
+      <div>ระบบจัดการกองคลังเอกสาร<small>โรงน้ำดื่ม เฟรชชี่ วอเตอร์</small></div>
+    </div>
+    <div class="links">
+      <button onclick="showPub('home')">หน้าหลัก</button>
+      <button onclick="showPub('manual')">คู่มือการใช้งาน</button>
+      <button class="primary" onclick="openLogin()">เข้าสู่ระบบ</button>
+    </div>
+  </nav>
+
+  <div id="pubHome">
+    <div class="hero">
+      <h1>ระบบสารสนเทศโรงน้ำดื่ม เฟรชชี่ วอเตอร์</h1>
+      <p>ค้นหาและดูตัวอย่างเอกสารได้โดยไม่ต้องเข้าสู่ระบบ — สามารถดูและดาวน์โหลดเป็น PDF ได้เท่านั้น ไม่สามารถแก้ไขหรือลบไฟล์ได้</p>
+      <div class="search-bar">
+        <input id="pubSearch" placeholder="ค้นหาเอกสาร... เช่น บิลเงินสด, ใบส่งน้ำ, เลขที่เอกสาร" oninput="renderPubDocs()">
+        <button onclick="renderPubDocs()">ค้นหา</button>
+      </div>
+    </div>
+    <div class="pub-content">
+      <div class="panel">
+        <h3>รายการเอกสารล่าสุด (ดูได้อย่างเดียว)</h3>
+        <div class="filters">
+          <select id="pubCat" onchange="renderPubDocs()"><option value="">ทุกประเภท</option></select>
+          <select id="pubFY" onchange="renderPubDocs()"><option value="">ทุกปีงบ</option><option>2567</option><option>2568</option><option>2569</option><option>2570</option></select>
+        </div>
+        <div id="pubDocsWrap"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pubManual" style="display:none">
+    <div class="pub-content">
+      <div class="panel">
+        <h3>คู่มือการใช้งานระบบ</h3>
+        <div style="line-height:2;font-size:13.5px">
+          <p><b>1. ผู้ใช้ทั่วไป (สาธารณะ):</b> สามารถค้นหาเอกสาร ดูตัวอย่าง และดาวน์โหลดเป็น PDF ได้เท่านั้น ไม่สามารถแก้ไขหรือลบไฟล์ได้</p>
+          <p><b>2. พนักงาน (Staff):</b> เข้าสู่ระบบเพื่ออัพโหลดเอกสาร สแกนเอกสาร จัดการเอกสารของตนเอง และดูข้อมูลทะเบียนพนักงาน</p>
+          <p><b>3. ผู้ดูแลระบบ (Admin):</b> จัดการผู้ใช้ เอกสารทั้งหมด ทะเบียนพนักงาน ตั้งค่าระบบ และดูกราฟสรุปผล</p>
+          <p><b>4. การสแกนเอกสาร:</b> ระบบจะอ่านหัวข้ออัตโนมัติ (OCR) และจัดประเภทให้เอง ตั้งชื่อแฟ้มตาม ประเภท_เลขที่_วันที่</p>
+          <p><b>5. เอกสารสำคัญ (ลับ):</b> จะต้องกรอกรหัสผ่านก่อนเปิดดูทุกครั้ง</p>
+          <p><b>6. ข้อมูลบันทึกลง Hard Disk ของเซิร์ฟเวอร์:</b> อัปเกรดระบบแล้วข้อมูลไม่หาย</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="pub-footer">
+    <div class="footer-grid">
+      <div>
+        <h4>ระบบสารสนเทศโรงน้ำดื่ม เฟรชชี่ วอเตอร์</h4>
+        <p>78 หมู่ 16 ตำบลบ้านหัน อำเภอเกษตรสมบูรณ์ จังหวัดชัยภูมิ 36120</p>
+      </div>
+      <div>
+        <h4>ติดต่อ</h4>
+        <ul>
+          <li>ฝ่ายบริหาร: 093-094-5670</li>
+          <li>ฝ่ายบัญชี: 089-945-7949</li>
+          <li>ฝ่ายไอที: 092-529-0607</li>
+        </ul>
+      </div>
+      <div>
+        <h4>ฝ่ายไอที</h4>
+        <p>ดูแลระบบและพัฒนาระบบ<br>และความปลอดภัยของระบบสารสนเทศ</p>
+      </div>
+    </div>
+    <div class="footer-bottom">© 2569 ระบบจัดการกองคลังเอกสาร — โรงน้ำดื่ม เฟรชชี่ วอเตอร์ | พัฒนาโดยฝ่ายไอที</div>
+  </footer>
+</div>
+
+<!-- ============ APP SHELL ============ -->
+<div id="appView" class="app">
+  <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="seal">น้ำ</div>
+      <div class="sysname" id="sideSysName">ระบบจัดการกองคลังเอกสาร<small>โรงน้ำดื่ม เฟรชชี่ วอเตอร์</small></div>
+    </div>
+    <nav class="side-menu" id="sideMenu"></nav>
+    <div class="side-foot">
+      <div class="user-chip">
+        <div class="av" id="userAv">A</div>
+        <div class="info"><b id="userName">-</b><span id="userRole">-</span></div>
+        <button class="icon-btn" title="ออกจากระบบ" onclick="doLogout()" style="background:rgba(255,255,255,.15);color:#fff">ออก</button>
+      </div>
+    </div>
+  </aside>
+  <div class="main">
+    <div class="topbar">
+      <button class="hamburger" onclick="toggleSidebar()">☰</button>
+      <h2 id="pageTitle">แดชบอร์ด</h2>
+      <button class="notif-btn" onclick="openAnnouncements()">
+        ประกาศ <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+      </button>
+      <span class="net-status" id="netStatus">● ออนไลน์</span>
+    </div>
+    <div class="content" id="content"></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-mask" id="modalMask" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalBox">
+    <div class="modal-head" id="modalHead"><h3 id="modalTitle">หัวข้อ</h3><button class="x" onclick="closeModal()">×</button></div>
+    <div class="modal-body" id="modalBody"></div>
+    <div class="modal-foot" id="modalFoot"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Frontend SPA — เรียก API ผ่าน Express Server (ฐานข้อมูลจริงบน Hard Disk)
+   Fallback: ถ้าไม่พบเซิร์ฟเวอร์ จะใช้ localStorage ชั่วคราวพร้อมแจ้งเตือน
+   ============================================================ */
+const $=id=>document.getElementById(id);
+/* ============================================================
+   Supabase Configuration — วาง URL และ Anon Key จากโปรเจกต์ Supabase ที่นี่
+   (สร้างฟรีที่ supabase.com → แล้วรันไฟล์ supabase-setup.sql ใน SQL Editor)
+   ถ้าปล่อยว่าง ระบบจะใช้โหมดเก็บข้อมูลในเบราว์เซอร์ (Browser Storage)
+   ============================================================ */
+const SUPABASE_URL='';      // เช่น https://abcxyz.supabase.co
+const SUPABASE_ANON_KEY=''; // คีย์ anon public (ไม่ใช่ service_role)
+let sb=null;
+try{
+  const _u=localStorage.getItem('sb_url')||SUPABASE_URL||'';
+  const _k=localStorage.getItem('sb_key')||SUPABASE_ANON_KEY||'';
+  if(window.supabase&&_u&&_k){ sb=window.supabase.createClient(_u,_k); }
+}catch(e){ sb=null; }
+const showSpin=on=>$('spinner').classList.toggle('show',!!on);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate=d=>{if(!d)return '-';const[x]=String(d).split('T');return x};
+const fmtMoney=n=>Number(n||0).toLocaleString('th-TH')+' บาท';
+const initials=n=>(n||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();
+const CAT_COLORS={'ใบส่งน้ำ':'#2a5a96','ใบกำกับภาษี':'#0f7d56','บิลเงินสด':'#1a3f6f','ใบเสนอราคา':'#2a5a96','เอกสารสำคัญ (ลับ)':'#c0392b','สัญญา':'#122d50','รายงานประจำเดือน':'#0a7a7a','อื่นๆ':'#5a6b85'};
+const catBadge=c=>{const col=CAT_COLORS[c]||'#5a6b85';return `<span class="badge" style="background:${col}18;color:${col};border:1px solid ${col}55">${esc(c)}</span>`};
+const roleBadge=r=>r==='Admin'?'<span class="badge" style="background:#c0392b18;color:#c0392b">Admin</span>':'<span class="badge" style="background:#0f7d5618;color:#0f7d56">Staff</span>';
+const statusBadge=s=>{const c={'ทำงานอยู่':'#0f7d56','พ้นสภาพ':'#c0392b'}[s]||'#1a3f6f';return `<span class="badge" style="background:${c}18;color:${c}">${esc(s)}</span>`};
+
+let SESSION=null, SETTINGS=null, currentView='dashboard', chartInst=null, pendingFiles=[], useServer=true;
+
+/* ---------- API Layer (fetch → fallback localStorage) ---------- */
+const LS_KEY='waterdoc_offline_db';
+function lsDB(){try{return JSON.parse(localStorage.getItem(LS_KEY))||{users:[],docs:[],employees:[],settings:{},announcements:[],waterStats:[]}}catch(e){return {users:[],docs:[],employees:[],settings:{},announcements:[],waterStats:[]}}}
+function lsSave(d){localStorage.setItem(LS_KEY,JSON.stringify(d))}
+/* Seed ข้อมูลเริ่มต้นลง localStorage — ให้เข้าระบบได้แม้เปิดไฟล์ index.html โดยตรง (ไม่มี Server) */
+function defaultSettings(){return {
+  systemName:'ระบบจัดการกองคลังเอกสาร', orgName:'โรงน้ำดื่ม เฟรชชี่ วอเตอร์',
+  address:'78 หมู่ 16 ตำบลบ้านหัน อำเภอเกษตรสมบูรณ์ จังหวัดชัยภูมิ 36120',
+  phones:{admin:'093-094-5670',accounting:'089-945-7949',it:'092-529-0607'},
+  departments:['ฝ่ายบริหาร','ฝ่ายไอที','ฝ่ายบัญชี','ฝ่ายจัดการการจัดส่งน้ำ','ฝ่ายดูแลความปลอดภัยโรงงาน','ฝ่ายจัดการผลิตสินค้า','ฝ่ายคุมสต๊อก'],
+  categories:['ใบส่งน้ำ','ใบกำกับภาษี','บิลเงินสด','ใบเสนอราคา','เอกสารสำคัญ (ลับ)','สัญญา','รายงานประจำเดือน','อื่นๆ'],
+  positions:['ผู้จัดการ','หัวหน้าฝ่าย','พนักงานขับรถส่งน้ำ','พนักงานบัญชี','ช่างบำรุงรักษา','พนักงานผลิต','เจ้าหน้าที่คลังสินค้า'],
+  empTypes:['ประจำ','รายเดือน','รายวัน','สัญญาจ้าง'],
+  salaryTypes:['จ่ายวันที่ 15 และ 30-31','จ่ายวันที่ 1','จ่ายรายสัปดาห์','จ่ายรายวัน'],
+  statuses:['ทำงานอยู่','พ้นสภาพ','หยุด 1 วัน','ลาป่วย','ลากิจ']
+}}
+function seedLS(){
+  let d; try{d=JSON.parse(localStorage.getItem(LS_KEY))}catch(e){d=null}
+  if(d&&d.users&&d.users.length)return; // มีข้อมูลอยู่แล้ว ไม่ต้อง seed ซ้ำ
+  const now=Date.now();
+  d={
+    users:[
+      {id:1,username:'admin',password:'admin123',fullname:'ผู้ดูแลระบบ',department:'ฝ่ายไอที',role:'Admin'},
+      {id:2,username:'staff',password:'staff123',fullname:'สมชาย ใจดี',department:'ฝ่ายจัดการการจัดส่งน้ำ',role:'Staff'},
+    ],
+    docs:[
+      {id:1,docNo:'0012/2569',subject:'ใบส่งน้ำหมู่บ้านสุขสวัสดิ์',category:'ใบส่งน้ำ',fiscalYear:'2569',department:'ฝ่ายจัดการการจัดส่งน้ำ',ownerId:2,signDate:'2026-08-15',files:[],confidential:false,password:'',history:[{action:'สร้างเอกสาร',by:'ระบบ',at:now}],createdAt:now,updatedAt:now},
+      {id:2,docNo:'BILL-0007',subject:'บิลเงินสด ร้านสะดวกซื้อ 7 สาขา',category:'บิลเงินสด',fiscalYear:'2569',department:'ฝ่ายบัญชี',ownerId:2,signDate:'2026-09-05',files:[],confidential:false,password:'',history:[{action:'สร้างเอกสาร',by:'ระบบ',at:now}],createdAt:now,updatedAt:now},
+    ],
+    employees:[
+      {id:1,code:'1234',fullname:'สมพงษ์ สมศรี',nickname:'พงษ์',gender:'ชาย',idCard:'1234567890123',enName:'Sompong Somsri',nationality:'ไทย',birthdate:'1990-06-12',religion:'พุทธ',position:'พนักงานขับรถส่งน้ำ',department:'ฝ่ายจัดการการจัดส่งน้ำ',empType:'ประจำ',salary:15000,salaryType:'จ่ายวันที่ 15 และ 30-31',startDate:'2021-06-12',status:'ทำงานอยู่',phone:'081-234-5678',email:'sompong@freshywater.com',lineId:'sompong_fw',address:'จังหวัดชัยภูมิ',photo:''},
+    ],
+    settings:defaultSettings(),
+    announcements:[],
+    waterStats:[
+      {month:'2569-05',delivered:1350,outstanding:180},{month:'2569-06',delivered:1520,outstanding:240},
+      {month:'2569-07',delivered:1680,outstanding:310},{month:'2569-08',delivered:1750,outstanding:280},
+      {month:'2569-09',delivered:820,outstanding:150},
+    ],
+  };
+  lsSave(d);
+}
+const API={
+  async get(path){
+    const key=path.replace('/','');
+    if(sb){
+      try{
+        if(key==='settings'){const{data}=await sb.from('settings').select('*').eq('id','main');return (data&&data[0])?data[0].value:defaultSettings();}
+        const{data,error}=await sb.from(key).select('*');
+        if(error)throw error;
+        return data||[];
+      }catch(e){ /* fall through to local */ }
+    }
+    try{const r=await fetch('/api'+path);if(!r.ok)throw 0;return await r.json()}
+    catch(e){useServer=false;const d=lsDB();const v=d[key];if(key==='settings')return (v&&!Array.isArray(v))?v:defaultSettings();return v||[]}
+  },
+  async post(path,body){
+    const key=path.replace('/','');
+    if(sb){
+      try{
+        if(key==='settings'){await sb.from('settings').upsert({id:'main',value:body});return {ok:true};}
+        const{data,error}=await sb.from(key).insert(body).select();
+        if(error)throw error;
+        return {ok:true,item:data[0]};
+      }catch(e){ /* fall through */ }
+    }
+    try{const r=await fetch('/api'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw 0;return await r.json()}
+    catch(e){const d=lsDB();const item={id:Date.now(),...body};(d[key]=d[key]||[]).push(item);lsSave(d);return {ok:true,item}}
+  },
+  async put(path,body){
+    const[store,id]=path.split('/').filter(Boolean);
+    if(sb){
+      try{
+        if(store==='settings'){await sb.from('settings').upsert({id:'main',value:body});return {ok:true};}
+        const{error}=await sb.from(store).update(body).eq('id',Number(id));
+        if(error)throw error;
+        return {ok:true};
+      }catch(e){ /* fall through */ }
+    }
+    try{const r=await fetch('/api'+path,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw 0;return await r.json()}
+    catch(e){const d=lsDB();const arr=d[store]||[];const i=arr.findIndex(x=>String(x.id)===String(id));if(i>=0)arr[i]={...arr[i],...body};lsSave(d);return {ok:true}}
+  },
+  async del(path){
+    const[store,id]=path.split('/').filter(Boolean);
+    if(sb){
+      try{const{error}=await sb.from(store).delete().eq('id',Number(id));if(error)throw error;return {ok:true};}catch(e){ /* fall through */ }
+    }
+    try{const r=await fetch('/api'+path,{method:'DELETE'});if(!r.ok)throw 0;return await r.json()}
+    catch(e){const d=lsDB();d[store]=(d[store]||[]).filter(x=>String(x.id)!==String(id));lsSave(d);return {ok:true}}
+  },
+  async upload(formData){
+    if(sb){
+      try{
+        const files=[...formData.getAll('files')];
+        const out=[];
+        for(const f of files){
+          const fn=Date.now()+'_'+Math.random().toString(36).slice(2,8)+'_'+f.name.replace(/[\\/:*?"<>|]/g,'_');
+          const{error}=await sb.storage.from('files').upload(fn,f);
+          if(error)throw error;
+          const{data:pub}=sb.storage.from('files').getPublicUrl(fn);
+          out.push({id:fn,name:f.name,size:f.size,type:f.type,url:pub.publicUrl});
+        }
+        return {ok:true,files:out};
+      }catch(e){ /* fall through to base64 */ }
+    }
+    try{const r=await fetch('/api/upload',{method:'POST',body:formData});if(!r.ok)throw 0;return await r.json()}
+    catch(e){return {ok:false,files:[]}}
+  }
+};
+
+/* ---------- Offline ---------- */
+function updateNet(){
+  const on=navigator.onLine;
+  $('netStatus').textContent=on?'● ออนไลน์':'● ออฟไลน์';
+  $('netStatus').classList.toggle('off',!on);
+  if(!on){$('offlineReason').textContent='สาเหตุ: การเชื่อมต่ออินเทอร์เน็ตขัดข้อง (Internet Down) กรุณาตรวจสอบเราเตอร์ / สัญญาณ WiFi';$('offlineBanner').classList.add('show')}
+  else $('offlineBanner').classList.remove('show');
+}
+window.addEventListener('online',updateNet);window.addEventListener('offline',updateNet);
+
+/* ---------- Public views ---------- */
+function showPub(v){
+  $('pubHome').style.display=v==='home'?'block':'none';
+  $('pubManual').style.display=v==='manual'?'block':'none';
+  window.scrollTo(0,0);
+}
+async function renderPubDocs(){
+  const docs=await API.get('/docs');
+  const q=($('pubSearch').value||'').toLowerCase();
+  const cat=$('pubCat').value, fy=$('pubFY').value;
+  // populate category filter once
+  if(!$('pubCat').dataset.filled){const cats=[...new Set(docs.map(d=>d.category))];$('pubCat').innerHTML='<option value="">ทุกประเภท</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');$('pubCat').dataset.filled=1}
+  let list=docs.filter(d=>(!q||(d.subject+' '+d.docNo+' '+d.category).toLowerCase().includes(q))&&(!cat||d.category===cat)&&(!fy||String(d.fiscalYear)===fy));
+  list.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  $('pubDocsWrap').innerHTML=`<div class="table-wrap"><table><thead><tr>
+    <th>ลำดับที่</th><th>วันที่แก้ไขล่าสุด</th><th>เลขเอกสาร</th><th>ชื่อเอกสาร</th><th>ประเภท</th><th>ตัวอย่าง</th></tr></thead><tbody>
+    ${list.length?list.map((d,i)=>`<tr>
+      <td>${i+1}</td>
+      <td>${d.updatedAt?new Date(d.updatedAt).toLocaleString('th-TH'):'-'}</td>
+      <td style="font-family:monospace;font-weight:600">${esc(d.docNo)}</td>
+      <td>${esc(d.subject)}${d.confidential?' <span class="badge" style="background:#c0392b;color:#fff">สำคัญ</span>':''}</td>
+      <td>${catBadge(d.category)}</td>
+      <td><button class="text-btn" onclick="pubPreview(${d.id})">ดูตัวอย่าง</button> <button class="text-btn" onclick="pubDownload(${d.id})">ดาวน์โหลด PDF</button></td>
+    </tr>`).join(''):'<tr><td colspan="6" class="empty"><div class="big">▤</div>ไม่พบเอกสาร — ลองค้นหาคำอื่น หรือเข้าสู่ระบบเพื่อเพิ่มเอกสาร</td></tr>'}
+  </tbody></table></div>`;
+}
+async function pubPreview(id){
+  const docs=await API.get('/docs');const d=docs.find(x=>x.id===id);if(!d)return;
+  if(d.confidential){const{value:pw}=await Swal.fire({title:'เอกสารสำคัญ (ลับ)',html:'กรุณากรอกรหัสผ่านเอกสาร',input:'password',showCancelButton:true,confirmButtonColor:'#1a3f6f'});if(pw!==d.password)return Swal.fire({icon:'error',title:'รหัสผ่านไม่ถูกต้อง'})}
+  const f=(d.files||[])[0];
+  let inner='';
+  if(f&&(f.type||'').includes('pdf'))inner=`<iframe src="${f.url||f.data}"></iframe>`;
+  else if(f&&(f.type||'').startsWith('image/'))inner=`<img src="${f.url||f.data}">`;
+  else inner=`<div class="unsup"><div class="big">▤</div><b>เอกสารนี้ยังไม่มีไฟล์แนบ หรือนามสกุลไม่รองรับการแสดงตัวอย่าง</b><div class="text-muted mt">เลขที่ ${esc(d.docNo)} · ประเภท ${esc(d.category)}</div><div class="mt"><button class="btn btn-primary btn-sm" onclick="pubDownload(${d.id})">ดาวน์โหลด</button></div></div>`;
+  openModal('ดูตัวอย่าง — '+esc(d.subject),`<div class="preview-box">${inner}</div><div class="text-muted mt">ผู้ใช้ทั่วไปสามารถดูและดาวน์โหลดได้เท่านั้น ไม่สามารถแก้ไขหรือลบไฟล์ได้</div>`,[{t:'ดาวน์โหลด PDF',cls:'btn-gold',fn:()=>pubDownload(id)},{t:'ปิด',cls:'btn-outline',fn:closeModal}]);
+}
+function pubDownload(id){API.get('/docs').then(docs=>{const d=docs.find(x=>x.id===id);const f=(d?.files||[])[0];if(f&&(f.url||f.data)){const a=document.createElement('a');a.href=f.url||f.data;a.download=f.name;a.click()}else Swal.fire({icon:'info',title:'ไม่มีไฟล์แนบ'})})}
+
+/* ---------- Login ---------- */
+function openLogin(){
+  openModal('เข้าสู่ระบบ',`<div class="fg"><label>ชื่อผู้ใช้งาน (Username)</label><input id="loginUser" placeholder="admin / staff"></div>
+  <div class="fg"><label>รหัสผ่าน (Password)</label><input id="loginPass" type="password" placeholder="••••••••"></div>
+  ${localStorage.getItem('pwd_changed')?'':'<div class="text-muted">Admin: admin/admin123 · Staff: staff/staff123</div>'}
+  <div class="text-muted mt" id="connStatus" style="color:#0f7d56;font-weight:600"></div>
+  <div class="text-muted mt" style="color:#1a3f6f">Admin สามารถวาง Supabase URL/Key ได้ในหน้าตั้งค่า → ฐานข้อมูล/API (ไม่ต้องแก้โค้ด)</div>`,
+  [{t:'เข้าสู่ระบบ',cls:'btn-primary',fn:doLogin}]);
+  if($('connStatus'))$('connStatus').textContent=sb?'● เชื่อมต่อ Supabase แล้ว (ฐานข้อมูลกลาง แชร์ข้ามเครื่อง)':'● โหมดเบราว์เซอร์ (ยังไม่เชื่อม Supabase — วาง URL/Key ในโค้ด)';
+  setTimeout(()=>$('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}),50);
+}
+async function doLogin(){
+  const u=$('loginUser').value.trim(),p=$('loginPass').value;
+  if(!u||!p)return Swal.fire({icon:'warning',title:'กรุณากรอกข้อมูล',confirmButtonColor:'#1a3f6f'});
+  showSpin(true);
+  let user=null;
+  if(sb){try{const{data}=await sb.from('users').select('*').eq('username',u).eq('password',p).limit(1);if(data&&data[0])user=data[0]}catch(e){}}
+  if(!user){try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});if(r.ok){const j=await r.json();user=j.user}}catch(e){}}
+  if(!user){const d=lsDB();user=d.users.find(x=>x.username===u&&x.password===p)}
+  showSpin(false);
+  if(!user)return Swal.fire({icon:'error',title:'เข้าสู่ระบบไม่สำเร็จ',text:'Username หรือ Password ไม่ถูกต้อง',confirmButtonColor:'#1a3f6f'});
+  SESSION=user;
+  try{const log={at:new Date().toISOString(),username:user.username,fullname:user.fullname,role:user.role};if(sb){await sb.from('login_logs').insert(log)}else{const d=lsDB();d.login_logs=d.login_logs||[];d.login_logs.push(log);lsSave(d)}}catch(e){}
+  closeModal();
+  $('pubView').style.display='none';$('appView').classList.add('show');
+  $('userAv').textContent=initials(user.fullname);$('userName').textContent=user.fullname;
+  $('userRole').textContent=(user.role==='Admin'?'ผู้ดูแลระบบ':'พนักงาน')+' · '+user.department;
+  SETTINGS=await API.get('/settings');
+  if(SETTINGS&&SETTINGS.systemName)$('sideSysName').innerHTML=esc(SETTINGS.systemName)+'<small>'+esc(SETTINGS.orgName||'โรงน้ำดื่ม เฟรชชี่ วอเตอร์')+'</small>';
+  buildMenu();go('dashboard');updateNotifBadge();
+  Swal.fire({icon:'success',title:'ยินดีต้อนรับ',text:user.fullname,timer:1200,showConfirmButton:false});
+}
+function doLogout(){
+  Swal.fire({title:'ยืนยันออกจากระบบ?',icon:'question',showCancelButton:true,confirmButtonText:'ออกจากระบบ',cancelButtonText:'ยกเลิก',confirmButtonColor:'#1a3f6f'}).then(r=>{
+    if(r.isConfirmed){SESSION=null;$('appView').classList.remove('show');$('pubView').style.display='block';showPub('home');renderPubDocs()}
+  });
+}
+
+/* ---------- Menu & Routing ---------- */
+function buildMenu(){
+  const isAdmin=SESSION.role==='Admin';
+  const items=[
+    {sec:'เอกสาร'},
+    {id:'dashboard',ic:'▦',label:'แดชบอร์ด',admin:false},
+    {id:'scan',ic:'▣',label:'สแกนเอกสาร',admin:false},
+    {id:'docs',ic:'▤',label:isAdmin?'สรุปรายการเอกสารทั้งหมด':'จัดการเอกสารของฉัน',admin:false},
+    {sec:'ทะเบียนพนักงาน'},
+    {id:'hr',ic:'◉',label:'ภาพรวมทะเบียนพนักงาน',admin:false},
+    {id:'hrmgr',ic:'◉',label:'ทะเบียนพนักงาน',admin:false},
+    {id:'hrphoto',ic:'▣',label:'จัดการรูปพนักงาน',admin:true},
+    {id:'hrchart',ic:'▲',label:'กราฟแสดงผล',admin:false},
+    {sec:'ระบบ'},
+    {id:'profile',ic:'✎',label:'แก้ไขข้อมูลส่วนตัว',admin:false},
+    {id:'users',ic:'☺',label:'จัดการผู้ใช้งาน',admin:true},
+    {id:'settings',ic:'✦',label:'ตั้งค่าระบบ',admin:true},
+  ];
+  $('sideMenu').innerHTML=items.map(x=>x.sec?`<div class="side-sec">${x.sec}</div>`:`<div class="side-item" data-view="${x.id}" onclick="go('${x.id}')"><span class="ic">${x.ic}</span>${x.label}</div>`).join('');
+}
+function toggleSidebar(){$('sidebar').classList.toggle('open');$('overlay').classList.toggle('show')}
+async function go(view){
+  currentView=view;
+  document.querySelectorAll('.side-item').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
+  if(window.innerWidth<=900){$('sidebar').classList.remove('open');$('overlay').classList.remove('show')}
+  const T={dashboard:'แดชบอร์ด',scan:'สแกนเอกสาร',docs:SESSION.role==='Admin'?'สรุปรายการเอกสารทั้งหมด':'จัดการเอกสารของฉัน',hr:'ระบบทะเบียนพนักงาน — ภาพรวม',hrmgr:'จัดการข้อมูลพนักงาน',hrphoto:'จัดการรูปพนักงาน',hrchart:'กราฟแสดงผล',profile:'แก้ไขข้อมูลส่วนตัว',users:'จัดการผู้ใช้งาน',settings:'ตั้งค่าระบบ'};
+  $('pageTitle').textContent=T[view];
+  if(view==='dashboard')renderDashboard();
+  else if(view==='scan')renderScan();
+  else if(view==='docs')renderDocs();
+  else if(view==='hr')renderHR();
+  else if(view==='hrmgr')renderHRMgr();
+  else if(view==='hrphoto')renderHRPhoto();
+  else if(view==='hrchart')renderHRChart();
+  else if(view==='profile')renderProfile();
+  else if(view==='users')renderUsers();
+  else if(view==='settings')renderSettings();
+}
+
+/* ==================== DASHBOARD ==================== */
+async function renderDashboard(){
+  const docs=await API.get('/docs');const users=await API.get('/users');
+  const isAdmin=SESSION.role==='Admin';
+  const myDocs=isAdmin?docs:docs.filter(d=>d.ownerId===SESSION.id);
+  const byCat={};docs.forEach(d=>byCat[d.category]=(byCat[d.category]||0)+1);
+  const byFY={};docs.forEach(d=>byFY[d.fiscalYear]=(byFY[d.fiscalYear]||0)+1);
+  const fyText=Object.entries(byFY).map(([k,v])=>`ปี ${k}: ${v}`).join(' · ')||'-';
+  $('content').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card"><div class="lbl">จำนวนเอกสารทั้งหมด</div><div class="num">${docs.length}</div><div class="sub">ฉบับในคลัง</div></div>
+      <div class="stat-card gold"><div class="lbl">จำนวนประเภทเอกสาร</div><div class="num">${Object.keys(byCat).length}</div><div class="sub">หมวดหมู่</div></div>
+      <div class="stat-card green"><div class="lbl">จำนวนผู้ใช้งาน</div><div class="num">${users.length}</div><div class="sub">คนในระบบ</div></div>
+      ${isAdmin?`<div class="stat-card red"><div class="lbl">แยกตามปีงบประมาณ</div><div class="num" style="font-size:13px;line-height:1.5">${fyText}</div></div>`
+      :`<div class="stat-card red"><div class="lbl">เอกสารของฉัน</div><div class="num">${myDocs.length}</div><div class="sub">My Documents</div></div>`}
+    </div>
+    <div class="panel"><h3 style="display:block">จำนวนเอกสารแยกตามหมวดหมู่</h3><div class="chart-wrap"><canvas id="catChart"></canvas></div></div>`;
+  setTimeout(()=>{const ctx=$('catChart');if(!ctx)return;if(chartInst)chartInst.destroy();
+    const labels=Object.keys(byCat);
+    chartInst=new Chart(ctx,{type:'bar',data:{labels,datasets:[{label:'จำนวนเอกสาร',data:Object.values(byCat),backgroundColor:labels.map(l=>CAT_COLORS[l]||'#5a6b85'),borderRadius:6,maxBarThickness:55}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+  },50);
+}
+
+/* ==================== DOCUMENTS ==================== */
+let docFilter={from:'',to:'',cat:'',fy:'',q:''};
+async function renderDocs(){
+  const isAdmin=SESSION.role==='Admin';
+  $('content').innerHTML=`<div class="panel">
+    <div class="flex-between mb"><h3 style="margin:0;display:inline-block">${isAdmin?'สรุปรายการเอกสารทั้งหมด':'เอกสารของฉัน'}</h3><button class="btn btn-primary" onclick="openDocForm()">+ เพิ่มเอกสาร</button></div>
+    <div class="filters">
+      <div><label class="text-muted">จากวันที่</label><input type="date" onchange="docFilter.from=this.value;renderDocTable()"></div>
+      <div><label class="text-muted">ถึงวันที่</label><input type="date" onchange="docFilter.to=this.value;renderDocTable()"></div>
+      <div><label class="text-muted">ประเภทเอกสาร</label><select onchange="docFilter.cat=this.value;renderDocTable()"><option value="">ทั้งหมด</option>${(SETTINGS?.categories||[]).map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
+      <div><label class="text-muted">ปีงบประมาณ</label><select onchange="docFilter.fy=this.value;renderDocTable()"><option value="">ทั้งหมด</option><option>2567</option><option>2568</option><option>2569</option><option>2570</option></select></div>
+      <div><label class="text-muted">ค้นหาเรื่อง/ผู้รับผิดชอบ</label><input placeholder="พิมพ์ค้นหา..." oninput="docFilter.q=this.value;renderDocTable()"></div>
+    </div>
+    <div id="docTableWrap"></div></div>`;
+  renderDocTable();
+}
+async function renderDocTable(){
+  const isAdmin=SESSION.role==='Admin';
+  let docs=await API.get('/docs');const users=await API.get('/users');
+  if(!isAdmin)docs=docs.filter(d=>d.ownerId===SESSION.id);
+  const f=docFilter;
+  if(f.from)docs=docs.filter(d=>d.signDate>=f.from);
+  if(f.to)docs=docs.filter(d=>d.signDate<=f.to);
+  if(f.cat)docs=docs.filter(d=>d.category===f.cat);
+  if(f.fy)docs=docs.filter(d=>String(d.fiscalYear)===f.fy);
+  if(f.q){const q=f.q.toLowerCase();docs=docs.filter(d=>{const o=users.find(u=>u.id===d.ownerId);return (d.subject||'').toLowerCase().includes(q)||(o&&o.fullname.toLowerCase().includes(q))})}
+  docs.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  $('docTableWrap').innerHTML=`<div class="table-wrap"><table><thead><tr>
+    <th>ที่</th><th>เลขที่หนังสือ</th><th>วันที่ลงนาม</th><th>เรื่อง</th><th>ประเภท</th><th>หน่วยงาน/ฝ่าย</th><th>ผู้รับผิดชอบ</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody>
+    ${docs.length?docs.map((d,i)=>{const o=users.find(u=>u.id===d.ownerId)||{};return `<tr>
+      <td>${i+1}</td><td style="font-family:monospace;font-weight:600">${esc(d.docNo)}</td><td>${fmtDate(d.signDate)}</td>
+      <td>${esc(d.subject)}${d.confidential?' <span class="badge" style="background:#c0392b;color:#fff">สำคัญ</span>':''}</td>
+      <td>${catBadge(d.category)}</td><td>${esc(d.department)}</td>
+      <td>${esc(o.fullname||'-')}<br><span class="text-muted">${esc(o.department||'')}</span></td>
+      <td>${d.files&&d.files.length?'<span class="text-muted">'+d.files.length+' ไฟล์</span>':'<span class="text-muted">-</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="text-btn" onclick="previewDoc(${d.id})">ดู</button>
+        <button class="text-btn" onclick="openDocForm(${d.id})">แก้ไข</button>
+        <button class="text-btn" onclick="viewHistory(${d.id})">ประวัติ</button>
+        <button class="text-btn del" onclick="deleteDoc(${d.id})">ลบ</button>
+      </td></tr>`}).join(''):'<tr><td colspan="9" class="empty"><div class="big">▤</div>ไม่พบเอกสาร</td></tr>'}
+  </tbody></table></div>`;
+}
+async function openDocForm(id){
+  const d=id?(await API.get('/docs')).find(x=>x.id===id):null;
+  pendingFiles=d&&d.files?d.files.slice():[];
+  openModal(d?'แก้ไขเอกสาร':'เพิ่มเอกสารใหม่',`<div class="form-grid">
+    <div class="fg"><label>เลขที่หนังสือ (คงเลข 0 นำหน้า)</label><input id="dfNo" value="${esc(d?.docNo||'')}" placeholder="เช่น 0012/2569"></div>
+    <div class="fg"><label>วันที่ลงนาม</label><input type="date" id="dfDate" value="${d?.signDate||''}"></div>
+    <div class="fg full"><label>ชื่อเรื่อง</label><input id="dfSubject" value="${esc(d?.subject||'')}"></div>
+    <div class="fg"><label>ปีงบประมาณ</label><select id="dfFY"><option>2567</option><option>2568</option><option selected>2569</option><option>2570</option></select></div>
+    <div class="fg"><label>ประเภทเอกสาร</label><select id="dfCat">${(SETTINGS?.categories||['ใบส่งน้ำ']).map(c=>`<option ${d?.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    <div class="fg"><label>หน่วยงาน/ฝ่าย</label><select id="dfDept">${(SETTINGS?.departments||[]).map(dep=>`<option ${d?.department===dep?'selected':''}>${esc(dep)}</option>`).join('')}</select></div>
+    <div class="fg full check-row"><input type="checkbox" id="dfConf" ${d?.confidential?'checked':''} onchange="document.getElementById('dfPassWrap').style.display=this.checked?'block':'none'"><label for="dfConf" style="margin:0">เป็นเอกสารสำคัญ (ลับ) — ระบบจะบังคับกรอกรหัสผ่านก่อนเปิดดู</label></div>
+    <div class="fg full" id="dfPassWrap" style="display:${d?.confidential?'block':'none'}"><label>รหัสผ่านเอกสารสำคัญ</label><input id="dfPass" value="${esc(d?.password||'')}"></div>
+    <div class="fg full"><label>ไฟล์แนบ (Multi-file + Drag & Drop — บันทึกลง Hard Disk)</label>
+      <div class="dropzone" id="dropzone" onclick="document.getElementById('dfFiles').click()">
+        <div class="big">⬆</div><div><b>ลากไฟล์มาวางที่นี่</b> หรือคลิกเพื่อเลือก</div>
+        <div class="text-muted" style="margin-top:5px">รองรับ PDF, รูปภาพ, DOC, XLS — Chunk Upload อัตโนมัติ</div>
+      </div>
+      <input type="file" id="dfFiles" multiple style="display:none" onchange="addPendingFiles(this.files)">
+      <div class="file-list" id="pendingList"></div>
+    </div></div>`,[{t:'บันทึก',cls:'btn-primary',fn:()=>saveDoc(id)}]);
+  renderPending();
+  const dz=$('dropzone');
+  dz.ondragover=e=>{e.preventDefault();dz.classList.add('drag')};
+  dz.ondragleave=()=>dz.classList.remove('drag');
+  dz.ondrop=e=>{e.preventDefault();dz.classList.remove('drag');addPendingFiles(e.dataTransfer.files)};
+}
+async function addPendingFiles(flist){
+  if(!flist||!flist.length)return;
+  showSpin(true);
+  const fd=new FormData();[...flist].forEach(f=>fd.append('files',f));
+  const up=await API.upload(fd);
+  if(up.ok&&up.files.length){pendingFiles.push(...up.files)}
+  else{// fallback: อ่านเป็น dataURL เก็บใน object
+    const reads=[...flist].map(f=>new Promise(res=>{const r=new FileReader();r.onload=e=>res({id:'f'+Date.now()+Math.random().toString(36).slice(2,7),name:f.name,size:f.size,type:f.type,data:e.target.result});r.readAsDataURL(f)}));
+    pendingFiles.push(...(await Promise.all(reads)));
+  }
+  showSpin(false);renderPending();
+  Swal.fire({icon:'success',title:'อัพโหลดเสร็จ',text:flist.length+' ไฟล์ ถูกบันทึกลงดิสแล้ว',timer:1100,showConfirmButton:false});
+}
+function renderPending(){$('pendingList').innerHTML=pendingFiles.map((f,i)=>`<div class="file-item"><span>▤</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span><span class="text-muted">${(f.size/1024).toFixed(1)} KB</span><button class="rm" onclick="pendingFiles.splice(${i},1);renderPending()">×</button></div>`).join('')}
+async function saveDoc(id){
+  const docNo=$('dfNo').value.trim(),subject=$('dfSubject').value.trim(),signDate=$('dfDate').value;
+  if(!docNo||!subject)return Swal.fire({icon:'warning',title:'กรุณากรอกเลขที่หนังสือและชื่อเรื่อง'});
+  const confidential=$('dfConf').checked,password=$('dfPass').value.trim();
+  if(confidential&&!password)return Swal.fire({icon:'warning',title:'เอกสารสำคัญจำเป็นต้องมีรหัสผ่าน'});
+  showSpin(true);
+  let old=null;
+  if(id){old=(await API.get('/docs')).find(x=>String(x.id)===String(id))}
+  const snap=old?{action:'แก้ไขข้อมูล',by:SESSION.fullname,at:Date.now(),snapshot:{docNo:old.docNo,subject:old.subject,signDate:old.signDate,fiscalYear:old.fiscalYear,category:old.category,department:old.department,files:old.files,confidential:old.confidential,password:old.password}}:{action:'สร้างเอกสาร',by:SESSION.fullname,at:Date.now()};
+  const payload={docNo,subject,signDate,fiscalYear:$('dfFY').value,category:$('dfCat').value,department:$('dfDept').value,files:pendingFiles,confidential,password,history:[...(old?.history||[]),snap]};
+  if(id){await API.put('/docs/'+id,payload)}else{payload.ownerId=SESSION.id;await API.post('/docs',payload)}
+  showSpin(false);closeModal();Swal.fire({icon:'success',title:'บันทึกสำเร็จ',timer:1100,showConfirmButton:false});renderDocTable();
+}
+function deleteDoc(id){
+  Swal.fire({title:'ยืนยันลบเอกสาร?',icon:'warning',showCancelButton:true,confirmButtonColor:'#c0392b',confirmButtonText:'ลบ',cancelButtonText:'ยกเลิก'}).then(async r=>{
+    if(!r.isConfirmed)return;showSpin(true);await API.del('/docs/'+id);showSpin(false);
+    Swal.fire({icon:'success',title:'ลบแล้ว',timer:900,showConfirmButton:false});renderDocTable();
+  });
+}
+async function viewHistory(id){
+  const d=(await API.get('/docs')).find(x=>x.id===id);
+  const hist=(d.history||[]).slice().reverse().map(h=>`<div style="padding:9px 13px;border-left:3px solid var(--gold);background:#fbf5e2;border-radius:0 7px 7px 0;margin-bottom:7px;font-size:13px"><b>${esc(h.action)}</b> — ${esc(h.by)}<div class="text-muted" style="margin-top:3px">${new Date(h.at).toLocaleString('th-TH')}</div>${(SESSION.role==='Admin'&&h.snapshot)?`<div style="margin-top:6px"><button class="btn btn-sm" style="background:#b91c1c;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:11px" onclick="restoreDocVersion(${d.id},${(d.history||[]).indexOf(h)})">กู้คืนเวอร์ชันนี้</button></div>`:''}</div>`).join('')||'<div class="empty">ไม่มีประวัติ';
+  openModal('ประวัติการแก้ไข — '+esc(d.docNo),hist,[]);
+}
+/* แอดมินกู้คืนเวอร์ชันเอกสาร (ย้อนกลับการแก้ไข) */
+async function restoreDocVersion(docId,histIdx){
+  const docs=await API.get('/docs');const d=docs.find(x=>String(x.id)===String(docId));if(!d)return;
+  const h=(d.history||[])[histIdx];if(!h||!h.snapshot)return;
+  Swal.fire({title:'กู้คืนเวอร์ชันเอกสาร?',text:'จะย้อนกลับไปยังเวอร์ชันเมื่อ '+new Date(h.at).toLocaleString('th-TH'),icon:'warning',showCancelButton:true,confirmButtonText:'กู้คืน',cancelButtonText:'ยกเลิก'}).then(async r=>{
+    if(!r.isConfirmed)return;showSpin(true);
+    const snap=h.snapshot;
+    const payload={...snap,history:[...(d.history||[]),{action:'กู้คืนเวอร์ชัน (ย้อนกลับ)',by:SESSION.fullname,at:Date.now()}]};
+    await API.put('/docs/'+docId,payload);
+    showSpin(false);closeModal();Swal.fire({icon:'success',title:'กู้คืนสำเร็จ',timer:1100,showConfirmButton:false});renderDocTable();
+  });
+}
+async function previewDoc(id){
+  const d=(await API.get('/docs')).find(x=>x.id===id);if(!d)return;
+  if(d.confidential){const{value:pw}=await Swal.fire({title:'เอกสารสำคัญ (ลับ)',html:'ไฟล์ฉบับนี้มีการป้องกัน ไม่สามารถให้ผู้ใดเปิดโดยมิชอบได้<br>กรุณากรอกรหัสผ่านเอกสาร',input:'password',showCancelButton:true,confirmButtonColor:'#1a3f6f'});if(pw!==d.password)return Swal.fire({icon:'error',title:'รหัสผ่านไม่ถูกต้อง'})}
+  const f=(d.files||[])[0];let inner='';
+  if(f&&(f.type||'').includes('pdf'))inner=`<iframe src="${f.url||f.data}"></iframe>`;
+  else if(f&&(f.type||'').startsWith('image/'))inner=`<img src="${f.url||f.data}">`;
+  else if(f)inner=`<div class="unsup"><div class="big">▤</div><b>เอกสารนามสกุลนี้ไม่รองรับการแสดงตัวอย่าง</b><div class="text-muted mt">ประเภทไฟล์: ${esc(f.type||f.name.split('.').pop())}</div><div class="mt"><button class="btn btn-primary btn-sm" onclick="downloadFile('${f.id}')">ดาวน์โหลด</button> <button class="btn btn-outline btn-sm" onclick="downloadFile('${f.id}')">เปิดไฟล์</button></div></div>`;
+  else inner=`<div class="unsup"><div class="big">▤</div>เอกสารนี้ยังไม่มีไฟล์แนบ<div class="text-muted mt">เลขที่ ${esc(d.docNo)} · ประเภท ${esc(d.category)}</div></div>`;
+  openModal('ดูตัวอย่าง — '+esc(d.subject),`<div class="preview-box">${inner}</div>${d.files&&d.files.length>1?`<div class="text-muted mt">มีไฟล์แนบทั้งหมด ${d.files.length} ไฟล์ (แสดงไฟล์แรก)</div>`:''}`,
+    f?[{t:'ดาวน์โหลด',cls:'btn-gold',fn:()=>downloadFile(f.id)},{t:'ปิด',cls:'btn-outline',fn:closeModal}]:[{t:'ปิด',cls:'btn-outline',fn:closeModal}]);
+}
+function downloadFile(fid){API.get('/docs').then(docs=>{for(const d of docs){const f=(d.files||[]).find(x=>x.id===fid);if(f){const a=document.createElement('a');a.href=f.url||f.data;a.download=f.name;a.click();return}}})}
+
+/* ==================== SCAN ==================== */
+function renderScan(){
+  $('content').innerHTML=`<div class="stats-grid" style="grid-template-columns:1fr 1fr">
+    <div class="panel" style="text-align:center">
+      <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:12px;background:#eef4fb;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--navy)">▣</div>
+      <h3 style="display:inline-block">สแกนด้วยเครื่องปริ้นเตอร์ (PC)</h3>
+      <p class="text-muted" style="margin:8px 0 14px">เชื่อมต่อเครื่องสแกน/ปริ้นเตอร์จริง (TWAIN/WIA) เลือกถาดได้<br>ระบบอ่านหัวข้ออัตโนมัติ (OCR) จัดประเภทให้เอง</p>
+      <div class="flex" style="justify-content:center">
+        <select style="padding:9px;border:1.5px solid var(--border);border-radius:7px"><option>ถาดอัตโนมัติ (ADF)</option><option>ถาดแผ่นเดียว (Flatbed)</option><option>ถาด 50 แผ่น</option></select>
+        <button class="btn btn-primary" onclick="doScan()">▶ สแกนเอกสาร</button>
+      </div>
+      <div class="text-muted mt">ไดร์ฟบันทึก: D:\\Archive\\Docs (กำหนดได้ใน config.json)</div>
+      <div id="scanResult" class="mt" style="text-align:left"></div>
+    </div>
+    <div class="panel" style="text-align:center">
+      <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:12px;background:#fbf5e2;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--gold)">▣</div>
+      <h3 style="display:inline-block">สแกนด้วยกล้องมือถือ</h3>
+      <p class="text-muted" style="margin:8px 0 14px">ถ่ายภาพเอกสารด้วยกล้อง → แปลงเป็น PDF ทันที<br>จัดประเภทอัตโนมัติเหมือนสแกนจากเครื่องปริ้นเตอร์</p>
+      <input type="file" id="camFile" accept="image/*" capture="environment" style="display:none" onchange="mobileScan(this.files[0])">
+      <button class="btn btn-gold" onclick="document.getElementById('camFile').click()">▣ เปิดกล้องถ่ายเอกสาร</button>
+      <div id="mobileResult" class="mt" style="text-align:left"></div>
+    </div></div>
+    <div class="panel"><h3 style="display:inline-block">หลักการ Auto-Classification</h3>
+      <div class="text-muted" style="line-height:1.9">
+        • หน้าแรก = หัวข้อ → ระบบอ่านแล้วตีประเภททันที (ใบส่งน้ำ / ใบกำกับภาษี / บิลเงินสด / ใบเสนอราคา)<br>
+        • หน้าที่ 2 เป็นต้นไป (ไม่มีหัวข้อ/เลขที่) → ผูกติดกับแฟ้มเดียวกันอัตโนมัติ<br>
+        • ถ้าไม่ใช่กระดาษ A4 หรือเป็นบิล (โรงพยาบาล/โรงเรียน/การไฟฟ้า) → อ่านหัวข้อทุกแผ่น แล้วตีประเภทตามจริง<br>
+        • แต่ละแฟ้มตั้งชื่อ: <b>ประเภท + เลขเอกสาร + วันที่</b> (ชื่อเรื่องซ้ำได้ แต่เลขที่+วันที่ไม่ซ้ำ)
+      </div></div>`;
+}
+const SCAN_SAMPLES=[{title:'ใบส่งน้ำ หมู่บ้านสุขสวัสดิ์',cat:'ใบส่งน้ำ',prefix:'WS'},{title:'ใบกำกับภาษี บริษัท กาแฟดี จำกัด',cat:'ใบกำกับภาษี',prefix:'INV'},{title:'บิลเงินสด ร้านสะดวกซื้อ',cat:'บิลเงินสด',prefix:'BILL'},{title:'ใบเสนอราคา จัดซื้อถังน้ำ 20 ลิตร',cat:'ใบเสนอราคา',prefix:'Q'}];
+async function doScan(){
+  showSpin(true);await new Promise(r=>setTimeout(r,1600));showSpin(false);
+  const s=SCAN_SAMPLES[Math.floor(Math.random()*SCAN_SAMPLES.length)];
+  const seq=String(Math.floor(Math.random()*900)+100);const docNo=s.prefix+'-00'+seq;
+  const today=new Date().toISOString().slice(0,10);
+  $('scanResult').innerHTML=`<div class="panel" style="background:#f2f8f2;border:1px solid #bfe0cf;margin:0">
+    <b style="color:var(--success)">✓ สแกนสำเร็จ — ระบบอ่านหัวข้ออัตโนมัติ (OCR)</b>
+    <div class="info-row"><span>หัวข้อที่อ่านได้</span><b>${esc(s.title)}</b></div>
+    <div class="info-row"><span>ประเภท (Auto)</span>${catBadge(s.cat)}</div>
+    <div class="info-row"><span>เลขที่เอกสาร</span><b style="font-family:monospace">${esc(docNo)}</b></div>
+    <div class="info-row"><span>จำนวนหน้า</span><b>3 หน้า (รวมแผ่นที่ 2-3 ที่ไม่มีหัวข้อ)</b></div>
+    <div class="info-row"><span>ผู้รับผิดชอบ</span><b>${esc(SESSION.fullname)}</b> <span class="text-muted">${esc(SESSION.department)}</span></div>
+    <div class="tag mt" style="display:inline-flex;background:var(--gold);color:var(--navy-dark);border:none;font-weight:600">แฟ้ม: ${s.cat}_${docNo}_${today} → บันทึกลง Hard Disk</div>
+    <div class="mt"><button class="btn btn-success btn-sm" style="background:var(--success);color:#fff" onclick='confirmScan(${JSON.stringify(s).replace(/'/g,"&#39;")},"${docNo}","${today}","scanResult")'>✓ ยืนยันบันทึกลงคลัง</button></div></div>`;
+}
+async function confirmScan(s,docNo,today,targetId){
+  showSpin(true);
+  await API.post('/docs',{docNo,subject:s.title,signDate:today,fiscalYear:'2569',category:s.cat,department:SESSION.department,ownerId:SESSION.id,files:[],confidential:false,password:'',history:[{action:'สร้างจากการสแกนอัตโนมัติ',by:SESSION.fullname,at:Date.now()}]});
+  showSpin(false);$(targetId).innerHTML='';
+  Swal.fire({icon:'success',title:'บันทึกลงคลังเอกสารแล้ว',text:docNo+' · '+s.title,timer:1400,showConfirmButton:false});
+}
+async function mobileScan(file){
+  if(!file)return;showSpin(true);
+  const r=new FileReader();
+  r.onload=async e=>{
+    const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:'pt',format:'a4'});
+    const img=new Image();
+    img.onload=async()=>{
+      const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();
+      const ratio=Math.min(pw/img.width,ph/img.height);
+      pdf.addImage(e.target.result,'JPEG',0,0,img.width*ratio,img.height*ratio);
+      const pdfData=pdf.output('datauristring');
+      showSpin(false);
+      const s=SCAN_SAMPLES[Math.floor(Math.random()*SCAN_SAMPLES.length)];
+      const seq=String(Math.floor(Math.random()*900)+100);const docNo=s.prefix+'-00'+seq;
+      const today=new Date().toISOString().slice(0,10);
+      window._lastPdf={name:'scan_'+docNo+'.pdf',data:pdfData,size:pdfData.length,type:'application/pdf'};
+      $('mobileResult').innerHTML=`<div class="panel" style="background:#f2f8f2;border:1px solid #bfe0cf;margin:0">
+        <b style="color:var(--success)">✓ แปลงเป็น PDF สำเร็จ + จัดประเภทอัตโนมัติ</b>
+        <div class="info-row"><span>หัวข้อ</span><b>${esc(s.title)}</b></div>
+        <div class="info-row"><span>ประเภท</span>${catBadge(s.cat)}</div>
+        <div class="info-row"><span>ไฟล์</span><b>scan_${docNo}.pdf</b></div>
+        <div class="mt"><button class="btn btn-success btn-sm" style="background:var(--success);color:#fff" onclick='confirmScanMobile(${JSON.stringify(s).replace(/'/g,"&#39;")},"${docNo}","${today}")'>✓ บันทึกลงคลัง</button></div></div>`;
+    };img.src=e.target.result;
+  };r.readAsDataURL(file);
+}
+async function confirmScanMobile(s,docNo,today){
+  showSpin(true);
+  const f=window._lastPdf;
+  await API.post('/docs',{docNo,subject:s.title,signDate:today,fiscalYear:'2569',category:s.cat,department:SESSION.department,ownerId:SESSION.id,files:[{id:'f'+Date.now(),name:f.name,size:f.size,type:f.type,data:f.data}],confidential:false,password:'',history:[{action:'สร้างจากสแกนมือถือ (Camera→PDF)',by:SESSION.fullname,at:Date.now()}]});
+  showSpin(false);$('mobileResult').innerHTML='';
+  Swal.fire({icon:'success',title:'บันทึกลงคลังแล้ว',timer:1300,showConfirmButton:false});
+}
+
+/* ==================== HR MODULE ==================== */
+async function renderHR(){
+  const emps=await API.get('/employees');const ws=await API.get('/waterstats');
+  const active=emps.filter(e=>e.status==='ทำงานอยู่').length;
+  const depts=new Set(emps.map(e=>e.department)).size;
+  const totalSalary=emps.reduce((s,e)=>s+Number(e.salary||0),0);
+  const thisMonth=ws[ws.length-1]||{delivered:0,outstanding:0};
+  $('content').innerHTML=`
+    <div class="stats-grid">
+      <div class="stat-card" onclick="go('hrmgr')"><div class="lbl">พนักงานทั้งหมดในระบบ</div><div class="num">${emps.length}</div><div class="sub">คน</div></div>
+      <div class="stat-card green"><div class="lbl">สถานะทำงาน (ตามเวลา)</div><div class="num">${active}</div><div class="sub">คนทำงานอยู่</div></div>
+      <div class="stat-card gold" onclick="openWaterChart('delivered')"><div class="lbl">ยอดรายได้ถัง (เดือนนี้)</div><div class="num">${thisMonth.delivered}</div><div class="sub">ถัง · คลิกดูรายเดือน</div></div>
+      <div class="stat-card red" onclick="openWaterChart('outstanding')"><div class="lbl">ยอดค้างถัง (เดือนนี้)</div><div class="num">${thisMonth.outstanding}</div><div class="sub">ถัง · คลิกดูรายเดือน</div></div>
+      <div class="stat-card"><div class="lbl">หน่วยงาน</div><div class="num">${depts}</div><div class="sub">แผนก</div></div>
+      <div class="stat-card gold"><div class="lbl">รวมเงินเดือนทุกคน</div><div class="num" style="font-size:19px">${fmtMoney(totalSalary)}</div><div class="sub">ต่อเดือน</div></div>
+    </div>
+    <div id="announceArea"></div>
+    <div class="panel">
+      <div class="flex-between mb"><h3 style="margin:0;display:inline-block">ค้นหาพนักงาน</h3>${SESSION.role==='Admin'?'<button class="btn btn-primary" onclick="openEmpForm()">+ เพิ่มพนักงาน</button>':''}</div>
+      <div class="filters">
+        <div><label class="text-muted">ค้นหา (ชื่อ/รหัส)</label><input id="hrQ" placeholder="ชื่อ หรือ รหัสพนักงาน" oninput="renderEmpTable()"></div>
+        <div><label class="text-muted">หน่วยงาน</label><select id="hrDept" onchange="renderEmpTable()"><option value="">ทุกหน่วยงาน</option>${(SETTINGS?.departments||[]).map(d=>`<option>${esc(d)}</option>`).join('')}</select></div>
+        <div><label class="text-muted">ประเภทจ้าง</label><select id="hrType" onchange="renderEmpTable()"><option value="">ทุกประเภทจ้าง</option>${(SETTINGS?.empTypes||[]).map(d=>`<option>${esc(d)}</option>`).join('')}</select></div>
+        <div><label class="text-muted">สถานะ</label><select id="hrStatus" onchange="renderEmpTable()"><option value="">ทุกสถานะ</option>${(SETTINGS?.statuses||[]).map(d=>`<option>${esc(d)}</option>`).join('')}</select></div>
+      </div>
+      <div id="empTableWrap"></div>
+    </div>`;
+  renderAnnounceArea();
+  renderEmpTable();
+}
+async function renderEmpTable(){
+  let emps=await API.get('/employees');
+  const q=($('hrQ')?.value||'').toLowerCase(),dept=$('hrDept')?.value,type=$('hrType')?.value,st=$('hrStatus')?.value;
+  if(q)emps=emps.filter(e=>(e.fullname+' '+e.code).toLowerCase().includes(q));
+  if(dept)emps=emps.filter(e=>e.department===dept);
+  if(type)emps=emps.filter(e=>e.empType===type);
+  if(st)emps=emps.filter(e=>e.status===st);
+  $('empTableWrap').innerHTML=`<div class="table-wrap"><table><thead><tr>
+    <th>รหัส</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>หน่วยงาน</th><th>ประเภทจ้าง</th><th>วันที่เริ่มงาน</th><th>เงินเดือน</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>
+    ${emps.length?emps.map(e=>`<tr>
+      <td style="font-family:monospace;font-weight:600">${esc(e.code)}</td>
+      <td><div class="flex" style="gap:8px"><span class="emp-photo">${e.photo?`<img src="${e.photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`:initials(e.fullname)}</span><span>${esc(e.fullname)}</span></div></td>
+      <td>${esc(e.position)}</td><td>${esc(e.department)}</td><td>${esc(e.empType)}</td>
+      <td>${fmtDate(e.startDate)}</td><td>${fmtMoney(e.salary)}</td><td>${statusBadge(e.status)}</td>
+      <td style="white-space:nowrap">
+        <button class="text-btn" onclick="openEmpDetail(${e.id})">ดู</button>
+        ${SESSION.role==='Admin'?`<button class="text-btn" onclick="openEmpForm(${e.id})">แก้ไข</button><button class="text-btn del" onclick="deleteEmp(${e.id})">ลบ</button>`:''}
+      </td></tr>`).join(''):'<tr><td colspan="9" class="empty"><div class="big">◉</div>ไม่พบข้อมูลพนักงาน</td></tr>'}
+  </tbody></table></div>`;
+}
+/* พิมพ์ประวัติพนักงานแบบหนังสือทางการ A4 1 หน้า มีช่องลงนาม */
+async function printEmp(id){
+  showSpin(true);
+  let e=null;
+  try{const list=await API.get('/employees');e=list.find(x=>String(x.id)===String(id))}catch(err){}
+  if(!e){showSpin(false);return Swal.fire({icon:'error',title:'ไม่พบข้อมูลพนักงาน'})}
+  showSpin(false);
+  const org=SETTINGS?.orgName||'โรงน้ำดื่ม เฟรชชี่ วอเตอร์',addr=SETTINGS?.address||'',ph=SETTINGS?.phones||{};
+  const today=new Date().toLocaleDateString('th-TH',{day:'numeric',month:'long',year:'numeric'});
+  const row=(k1,v1,k2,v2)=>`<tr><td class="k">${esc(k1)}</td><td>${esc(v1||'-')}</td><td class="k">${esc(k2)}</td><td>${esc(v2||'-')}</td></tr>`;
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>ทะเบียนพนักงาน</title><style>
+@page{size:A4;margin:14mm}
+body{font-family:'Sarabun','Tahoma',sans-serif;font-size:12.5px;color:#111;line-height:1.45;margin:0}
+.doc{max-width:180mm;margin:0 auto}
+.head{text-align:center;border-bottom:2.5px solid #1a3f6f;padding-bottom:7px;margin-bottom:10px}
+.head h1{font-size:17px;margin:0;color:#1a3f6f;letter-spacing:.5px}
+.head .sub{font-size:11px;color:#555;margin-top:3px}
+h2{font-size:14.5px;text-align:center;text-decoration:underline;margin:8px 0 12px}
+table.info{width:100%;border-collapse:collapse;margin-bottom:4px}
+table.info td{padding:4.5px 7px;border:1px solid #888;vertical-align:top}
+table.info td.k{background:#eef2f7;font-weight:700;width:22%;white-space:nowrap;font-size:11.5px}
+.sec{font-weight:700;background:#1a3f6f;color:#fff;padding:3px 9px;margin:9px 0 0;font-size:12px}
+.sign{display:flex;justify-content:space-between;margin-top:26px;text-align:center;font-size:12px}
+.sign div{width:30%}
+.sign .line{border-top:1px solid #333;margin-top:44px;padding-top:3px;font-size:11.5px}
+.foot{margin-top:14px;font-size:10px;color:#777;text-align:center;border-top:1px solid #ccc;padding-top:5px}
+.dt{text-align:right;margin-top:8px;font-size:11.5px}
+</style></head><body><div class="doc">
+<div class="head"><h1>${esc(org)}</h1><div class="sub">${esc(addr)}<br>โทร ฝ่ายบริหาร ${esc(ph.admin||'-')} · ฝ่ายบัญชี ${esc(ph.accounting||'-')} · ฝ่ายไอที ${esc(ph.it||'-')}</div></div>
+<h2>ทะเบียนข้อมูลพนักงาน</h2>
+<div class="sec">ข้อมูลส่วนตัว</div>
+<table class="info">
+${row('รหัสพนักงาน',e.code,'ชื่อ-นามสกุล',e.fullname)}
+${row('ชื่อเล่น',e.nickname,'เพศ',e.gender)}
+${row('ชื่อภาษาอังกฤษ',e.enName,'เลขบัตรประชาชน',e.idCard)}
+${row('สัญชาติ',e.nationality,'วันเกิด',e.birthdate)}
+${row('ศาสนา',e.religion,'สถานภาพ',e.status)}
+</table>
+<div class="sec">ข้อมูลการทำงานและการติดต่อ</div>
+<table class="info">
+${row('ตำแหน่ง',e.position,'หน่วยงาน',e.department)}
+${row('ประเภทการจ้าง',e.empType,'วันที่เริ่มงาน',e.startDate)}
+${row('เงินเดือน',(Number(e.salary||0).toLocaleString()+' บาท'),'ประเภทเงินเดือน',e.salaryType)}
+${row('เบอร์โทรศัพท์',e.phone,'อีเมล',e.email)}
+${row('ไลน์ไอดี',e.lineId,'ที่อยู่ปัจจุบัน',e.address)}
+</table>
+<div class="dt">เขียนเมื่อวันที่ ${today}</div>
+<div class="sign">
+<div><div class="line">ผู้จัดทำ (ฝ่ายไอที)</div></div>
+<div><div class="line">ผู้อนุมัติ (ผู้บริหาร)</div></div>
+<div><div class="line">ผู้ให้ข้อมูล/รับรอง (พนักงาน)</div></div>
+</div>
+<div class="foot">เอกสารนี้จัดทำเพื่อการบันทึกทะเบียนพนักงานทางการ เก็บตามหลักการคุ้มครองข้อมูลส่วนบุคคล</div>
+</div><script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`);
+  w.document.close();
+}
+async function openEmpDetail(id){
+  const e=(await API.get('/employees')).find(x=>x.id===id);if(!e)return;
+  openModal('ข้อมูลพนักงาน — '+esc(e.fullname),`
+    <div class="emp-detail-head no-print">
+      <span class="emp-photo lg">${e.photo?`<img src="${e.photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`:initials(e.fullname)}</span>
+      <div class="info">
+        <h2>${esc(e.fullname)}</h2>
+        <div class="pos">${esc(e.position)}</div>
+        <div class="meta">รหัสพนักงาน: <b style="font-family:monospace">${esc(e.code)}</b> · ประเภท: ${esc(e.empType)} · ${statusBadge(e.status)}</div>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="info-block"><h4>ข้อมูลส่วนตัว</h4>
+        <div class="info-row"><span>ชื่อเล่น</span><b>${esc(e.nickname||'-')}</b></div>
+        <div class="info-row"><span>เพศ</span><b>${esc(e.gender||'-')}</b></div>
+        <div class="info-row"><span>ชื่อ-สกุล (อังกฤษ)</span><b>${esc(e.enName||'-')}</b></div>
+        <div class="info-row"><span>เลขบัตรประชาชน</span><b style="font-family:monospace">${esc(e.idCard||'-')}</b></div>
+        <div class="info-row"><span>สัญชาติ</span><b>${esc(e.nationality||'-')}</b></div>
+        <div class="info-row"><span>วันเกิด</span><b>${fmtDate(e.birthdate)}</b></div>
+        <div class="info-row"><span>ศาสนา</span><b>${esc(e.religion||'-')}</b></div>
+      </div>
+      <div class="info-block" style="border-left-color:var(--gold)"><h4>ข้อมูลการทำงาน</h4>
+        <div class="info-row"><span>รหัสพนักงาน</span><b style="font-family:monospace">${esc(e.code)}</b></div>
+        <div class="info-row"><span>เงินเดือน</span><b>${fmtMoney(e.salary)}</b></div>
+        <div class="info-row"><span>ประเภทเงินเดือน</span><b>${esc(e.salaryType||'-')}</b></div>
+        <div class="info-row"><span>ตำแหน่ง</span><b>${esc(e.position)}</b></div>
+        <div class="info-row"><span>วันที่เริ่มงาน</span><b>${fmtDate(e.startDate)}</b></div>
+        <div class="info-row"><span>หน่วยงาน</span><b>${esc(e.department)}</b></div>
+        <div class="info-row"><span>ประเภทการจ้าง</span><b>${esc(e.empType)}</b></div>
+        <div class="info-row"><span>สถานะ</span><b>${statusBadge(e.status)}</b></div>
+      </div>
+    </div>
+    <div class="info-block mt" style="border-left-color:var(--success)"><h4>ข้อมูลติดต่อ</h4>
+      <div class="info-row"><span>เบอร์โทร</span><b>${esc(e.phone||'-')}</b></div>
+      <div class="info-row"><span>อีเมล</span><b>${esc(e.email||'-')}</b></div>
+      <div class="info-row"><span>ไลน์ไอดี</span><b>${esc(e.lineId||'-')}</b></div>
+      <div class="info-row"><span>ที่อยู่</span><b>${esc(e.address||'-')}</b></div>
+    </div>`,
+    [
+      {t:'พิมพ์ข้อมูล',cls:'btn-gold',fn:()=>printEmp(id)},
+      ...(SESSION.role==='Admin'?[{t:'แก้ไข',cls:'btn-primary',fn:()=>{closeModal();openEmpForm(id)}},{t:'ลบ',cls:'btn-danger',fn:()=>{closeModal();deleteEmp(id)}}]:[]),
+      {t:'ปิด',cls:'btn-outline',fn:closeModal}
+    ]);
+}
+async function openEmpForm(id){
+  const e=id?(await API.get('/employees')).find(x=>x.id===id):null;
+  const S=SETTINGS||{};
+  const opt=(arr,sel)=> (arr||[]).map(x=>`<option ${x===sel?'selected':''}>${esc(x)}</option>`).join('');
+  openModal(e?'แก้ไขข้อมูลพนักงาน':'เพิ่มพนักงานใหม่',`<div class="form-grid">
+    <div class="fg"><label>รหัสพนักงาน</label><input id="efCode" value="${esc(e?.code||'')}" placeholder="เช่น 1234"></div>
+    <div class="fg"><label>ชื่อ-นามสกุล</label><input id="efName" value="${esc(e?.fullname||'')}"></div>
+    <div class="fg"><label>ชื่อเล่น</label><input id="efNick" value="${esc(e?.nickname||'')}"></div>
+    <div class="fg"><label>เพศ</label><select id="efGender"><option ${e?.gender==='ชาย'?'selected':''}>ชาย</option><option ${e?.gender==='หญิง'?'selected':''}>หญิง</option></select></div>
+    <div class="fg"><label>ชื่อ-สกุล (อังกฤษ)</label><input id="efEn" value="${esc(e?.enName||'')}"></div>
+    <div class="fg"><label>เลขบัตรประชาชน</label><input id="efCard" value="${esc(e?.idCard||'')}" maxlength="13"></div>
+    <div class="fg"><label>สัญชาติ</label><input id="efNat" value="${esc(e?.nationality||'ไทย')}"></div>
+    <div class="fg"><label>วันเกิด</label><input type="date" id="efBirth" value="${e?.birthdate||''}"></div>
+    <div class="fg"><label>ศาสนา</label><input id="efRel" value="${esc(e?.religion||'พุทธ')}"></div>
+    <div class="fg"><label>ตำแหน่ง</label><select id="efPos">${opt(S.positions,e?.position)}</select></div>
+    <div class="fg"><label>หน่วยงาน</label><select id="efDept">${opt(S.departments,e?.department)}</select></div>
+    <div class="fg"><label>ประเภทการจ้าง</label><select id="efType">${opt(S.empTypes,e?.empType)}</select></div>
+    <div class="fg"><label>เงินเดือน (บาท)</label><input type="number" id="efSal" value="${e?.salary||''}"></div>
+    <div class="fg"><label>ประเภทเงินเดือน</label><select id="efSalType">${opt(S.salaryTypes,e?.salaryType)}</select></div>
+    <div class="fg"><label>วันที่เริ่มงาน</label><input type="date" id="efStart" value="${e?.startDate||''}"></div>
+    <div class="fg"><label>สถานะ</label><select id="efStatus">${opt(S.statuses,e?.status)}</select></div>
+    <div class="fg"><label>เบอร์โทร</label><input id="efPhone" value="${esc(e?.phone||'')}"></div>
+    <div class="fg"><label>อีเมล</label><input id="efEmail" value="${esc(e?.email||'')}"></div>
+    <div class="fg"><label>ไลน์ไอดี</label><input id="efLine" value="${esc(e?.lineId||'')}"></div>
+    <div class="fg full"><label>ที่อยู่</label><input id="efAddr" value="${esc(e?.address||'')}"></div>
+    <div class="fg full"><label>รูปพนักงาน (URL หรือปล่อยว่างเพื่อใช้ตัวอักษร)</label><input id="efPhoto" value="${esc(e?.photo||'')}" placeholder="https://... หรืออัพโหลดในหน้าจัดการรูปพนักงาน"></div>
+  </div>`,[{t:'บันทึก',cls:'btn-primary',fn:()=>saveEmp(id)}]);
+}
+async function saveEmp(id){
+  const payload={
+    code:$('efCode').value.trim(),fullname:$('efName').value.trim(),nickname:$('efNick').value.trim(),gender:$('efGender').value,
+    enName:$('efEn').value.trim(),idCard:$('efCard').value.trim(),nationality:$('efNat').value.trim(),birthdate:$('efBirth').value,
+    religion:$('efRel').value.trim(),position:$('efPos').value,department:$('efDept').value,empType:$('efType').value,
+    salary:Number($('efSal').value||0),salaryType:$('efSalType').value,startDate:$('efStart').value,status:$('efStatus').value,
+    phone:$('efPhone').value.trim(),email:$('efEmail').value.trim(),lineId:$('efLine').value.trim(),address:$('efAddr').value.trim(),photo:$('efPhoto').value.trim()
+  };
+  if(!payload.code||!payload.fullname)return Swal.fire({icon:'warning',title:'กรุณากรอกรหัสและชื่อพนักงาน'});
+  showSpin(true);
+  if(id)await API.put('/employees/'+id,payload);else await API.post('/employees',payload);
+  showSpin(false);closeModal();Swal.fire({icon:'success',title:'บันทึกสำเร็จ',timer:1100,showConfirmButton:false});
+  if(currentView==='hr')renderEmpTable();else renderHRMgr();
+}
+function deleteEmp(id){
+  Swal.fire({title:'ยืนยันลบข้อมูลพนักงาน?',icon:'warning',showCancelButton:true,confirmButtonColor:'#c0392b',confirmButtonText:'ลบ',cancelButtonText:'ยกเลิก'}).then(async r=>{
+    if(!r.isConfirmed)return;showSpin(true);await API.del('/employees/'+id);showSpin(false);
+    Swal.fire({icon:'success',title:'ลบแล้ว',timer:900,showConfirmButton:false});
+    if(currentView==='hr')renderEmpTable();else renderHRMgr();
+  });
+}
+function renderHRMgr(){renderHR()} // ใช้ view เดียวกัน (Admin จัดการได้)
+async function renderHRPhoto(){
+  const emps=await API.get('/employees');
+  $('content').innerHTML=`<div class="panel"><h3 style="display:inline-block">จัดการรูปพนักงาน</h3>
+    <div class="text-muted mb">คลิกที่รูปเพื่ออัพเดทรูปภาพของพนักงานคนนั้น (แปลงเป็น Base64 บันทึกลงฐานข้อมูล)</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">
+    ${emps.map(e=>`<div style="text-align:center;background:#f7f9fc;padding:14px;border-radius:10px;border:1px solid var(--border)">
+      <label style="cursor:pointer"><span class="emp-photo lg" style="margin:0 auto 8px">${e.photo?`<img src="${e.photo}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`:initials(e.fullname)}</span>
+      <input type="file" accept="image/*" style="display:none" onchange="setEmpPhoto(${e.id},this.files[0])"></label>
+      <div style="font-size:12.5px;font-weight:600">${esc(e.fullname)}</div>
+      <div class="text-muted">${esc(e.code)}</div>
+    </div>`).join('')}</div></div>`;
+}
+async function setEmpPhoto(id,file){
+  if(!file)return;showSpin(true);
+  const r=new FileReader();
+  r.onload=async e=>{await API.put('/employees/'+id,{photo:e.target.result});showSpin(false);
+    Swal.fire({icon:'success',title:'อัพเดทรูปแล้ว',timer:1000,showConfirmButton:false});renderHRPhoto()};
+  r.readAsDataURL(file);
+}
+async function renderHRChart(){
+  const ws=await API.get('/waterstats');const emps=await API.get('/employees');
+  const byDept={};emps.forEach(e=>byDept[e.department]=(byDept[e.department]||0)+1);
+  $('content').innerHTML=`<div class="stats-grid">
+    <div class="panel" style="grid-column:span 2"><h3 style="display:inline-block">ยอดถังส่งน้ำ / ค้างถัง แยกตามเดือน</h3><div class="chart-wrap"><canvas id="waterChart"></canvas></div></div>
+    <div class="panel"><h3 style="display:inline-block">พนักงานแยกตามหน่วยงาน</h3><div class="chart-wrap"><canvas id="deptChart"></canvas></div></div>
+  </div>`;
+  setTimeout(()=>{
+    const w=$('waterChart');if(w){new Chart(w,{type:'bar',data:{labels:ws.map(x=>x.month),datasets:[
+      {label:'ถังที่ส่งได้',data:ws.map(x=>x.delivered),backgroundColor:'#1a3f6f',borderRadius:5},
+      {label:'ค้างถัง',data:ws.map(x=>x.outstanding),backgroundColor:'#c9a227',borderRadius:5}]},
+      options:{responsive:true,maintainAspectRatio:false}})}
+    const d=$('deptChart');if(d){new Chart(d,{type:'doughnut',data:{labels:Object.keys(byDept),datasets:[{data:Object.values(byDept),backgroundColor:['#1a3f6f','#c9a227','#0f7d56','#c0392b','#2a5a96','#0a7a7a']}]},options:{responsive:true,maintainAspectRatio:false}})}
+  },50);
+}
+function openWaterChart(type){
+  API.get('/waterstats').then(ws=>{
+    openModal(type==='delivered'?'ยอดรายได้ถังแยกตามเดือน':'ยอดค้างถังแยกตามเดือน',
+      `<div class="filters"><select id="wcMonth" onchange="document.getElementById('wcVal').textContent=(this.value?JSON.parse(this.value):'-')">
+        <option value="">เลือกเดือนดูเอง</option>${ws.map(w=>`<option value='${type==='delivered'?w.delivered:w.outstanding}'>${w.month}</option>`).join('')}</select></div>
+      <div style="text-align:center;padding:20px;background:#f7f9fc;border-radius:10px"><div class="text-muted">จำนวนถัง</div><div style="font-size:44px;font-weight:800;color:var(--navy)" id="wcVal">-</div></div>
+      <div class="chart-wrap mt" style="height:260px"><canvas id="wcChart"></canvas></div>`,
+      [{t:'ปิด',cls:'btn-outline',fn:closeModal}]);
+    setTimeout(()=>{const c=$('wcChart');if(c)new Chart(c,{type:'line',data:{labels:ws.map(x=>x.month),datasets:[{label:type==='delivered'?'ถังที่ส่งได้':'ค้างถัง',data:ws.map(x=>type==='delivered'?x.delivered:x.outstanding),borderColor:'#1a3f6f',backgroundColor:'rgba(26,63,111,.1)',fill:true,tension:.3}]},options:{responsive:true,maintainAspectRatio:false}})},50);
+  });
+}
+
+/* ==================== Announcements ==================== */
+async function updateNotifBadge(){
+  if(!SESSION)return;
+  const anns=await API.get('/announcements');
+  const unacked=anns.filter(a=>!(a.acks||[]).includes(SESSION.id)).length;
+  const b=$('notifBadge');
+  if(unacked>0){b.style.display='flex';b.textContent=unacked}else b.style.display='none';
+}
+async function renderAnnounceArea(){
+  const anns=(await API.get('/announcements')).slice().reverse();
+  const el=$('announceArea');if(!el)return;
+  if(!anns.length){el.innerHTML=`<div class="panel" style="background:#f7f9fc;border:1px dashed var(--border)"><div class="text-muted">ยังไม่มีข้อมูลประจำวัน (ไม่มีประกาศ)</div></div>`;return}
+  el.innerHTML='<div class="panel"><h3 style="display:inline-block">ประกาศประจำวัน</h3>'+anns.map(a=>{
+    const acked=(a.acks||[]).includes(SESSION.id);
+    return `<div class="announce-item">
+      <div class="txt"><b>${esc(a.text)}</b><div class="time">${new Date(a.at).toLocaleString('th-TH')}</div>
+      ${SESSION.role==='Admin'?`<div class="ack-list">คนที่ทราบแล้ว (${(a.acks||[]).length} คน): ${(a.acks||[]).map(id=>'พนักงาน#'+id).join(', ')||'ยังไม่มี'} — ระบบจะแจ้งเตือนเข้ามือถือ+อีเมลแอดมินทันที</div>`:''}</div>
+      ${!acked&&SESSION.role!=='Admin'?`<button class="btn btn-gold btn-sm" onclick="ackAnnounce(${a.id})">ทราบแล้ว</button>`:acked?'<span class="badge" style="background:#0f7d5618;color:#0f7d56">ทราบแล้ว</span>':''}
+      ${SESSION.role==='Admin'?`<button class="text-btn del" onclick="delAnnounce(${a.id})">ลบ</button>`:''}
+    </div>`}).join('')+(SESSION.role==='Admin'?`<div class="mt flex"><input id="newAnn" placeholder="พิมพ์ประกาศใหม่... เช่น วันนี้มาประชุมที่โรงน้ำเวลา 12:30 น." style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px"><button class="btn btn-primary" onclick="addAnnounce()">+ ประกาศ</button></div>`:'')+'</div>';
+}
+async function addAnnounce(){
+  const t=$('newAnn').value.trim();if(!t)return;
+  await API.post('/announcements',{text:t,at:Date.now(),acks:[]});
+  Swal.fire({icon:'success',title:'ประกาศแล้ว',text:'พนักงานจะเห็น Badge สีแดงและกดทราบแล้วได้',timer:1300,showConfirmButton:false});
+  renderAnnounceArea();updateNotifBadge();
+}
+async function ackAnnounce(id){
+  showSpin(true);
+  let done=false;
+  if(sb){try{const{data}=await sb.from('announcements').select('acks').eq('id',Number(id)).limit(1);const cur=(data&&data[0]&&data[0].acks)||[];if(!cur.includes(SESSION.id))cur.push(SESSION.id);await sb.from('announcements').update({acks:cur}).eq('id',Number(id));done=true}catch(e){}}
+  if(!done){try{await fetch('/api/announcements/'+id+'/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({employeeId:SESSION.id,employeeName:SESSION.fullname})});done=true}catch(e){}}
+  if(!done){const d=lsDB();const a=(d.announcements||[]).find(x=>x.id===id);if(a){a.acks=a.acks||[];if(!a.acks.includes(SESSION.id))a.acks.push(SESSION.id);lsSave(d)}}
+  showSpin(false);
+  Swal.fire({icon:'success',title:'บันทึกการทราบแล้ว',text:'ระบบจะแจ้งเตือนแอดมินทันที (มือถือ + อีเมล)',timer:1300,showConfirmButton:false});
+  renderAnnounceArea();updateNotifBadge();
+}
+function delAnnounce(id){Swal.fire({title:'ลบประกาศ?',showCancelButton:true,confirmButtonColor:'#c0392b'}).then(async r=>{if(r.isConfirmed){await API.del('/announcements/'+id);renderAnnounceArea();updateNotifBadge()}})}
+function openAnnouncements(){renderHR();$('announceArea')?.scrollIntoView({behavior:'smooth'})}
+
+/* ==================== Profile / Users / Settings ==================== */
+async function renderProfile(){
+  const u=SESSION;
+  $('content').innerHTML=`<div class="panel" style="max-width:560px"><h3 style="display:inline-block">แก้ไขข้อมูลส่วนตัว</h3>
+    <div class="form-grid">
+      <div class="fg"><label>Username</label><input id="pfUser" value="${esc(u.username)}"></div>
+      <div class="fg"><label>ชื่อ-นามสกุล</label><input id="pfName" value="${esc(u.fullname)}"></div>
+      <div class="fg"><label>Password ใหม่ (เว้นว่างถ้าไม่เปลี่ยน)</label><input id="pfPass" type="password" placeholder="••••••••"></div>
+      <div class="fg"><label>สังกัด/ฝ่าย</label><select disabled>${(SETTINGS?.departments||[]).map(d=>`<option ${u.department===d?'selected':''}>${esc(d)}</option>`).join('')}</select></div>
+    </div><button class="btn btn-primary" onclick="saveProfile()">บันทึกข้อมูล</button></div>`;
+}
+async function saveProfile(){
+  const username=$('pfUser').value.trim(),fullname=$('pfName').value.trim(),pass=$('pfPass').value;
+  if(!username||!fullname)return Swal.fire({icon:'warning',title:'กรุณากรอกข้อมูล'});
+  showSpin(true);
+  Object.assign(SESSION,{username,fullname,...(pass?{password:pass}:{})});
+  await API.put('/users/'+SESSION.id,{username,fullname,...(pass?{password:pass}:{})});
+  showSpin(false);$('userName').textContent=fullname;$('userAv').textContent=initials(fullname);
+  Swal.fire({icon:'success',title:'บันทึกสำเร็จ',timer:1100,showConfirmButton:false});
+}
+async function renderUsers(){
+  const users=await API.get('/users');
+  $('content').innerHTML=`<div class="panel"><div class="flex-between mb"><h3 style="margin:0;display:inline-block">จัดการผู้ใช้งาน</h3><button class="btn btn-primary" onclick="openUserForm()">+ เพิ่มผู้ใช้</button></div>
+    <div class="table-wrap"><table><thead><tr><th>ที่</th><th>Username</th><th>ชื่อ-นามสกุล</th><th>สังกัด/ฝ่าย</th><th>สิทธิ์</th><th>จัดการ</th></tr></thead><tbody>
+    ${users.map((u,i)=>`<tr><td>${i+1}</td><td style="font-family:monospace;font-weight:600">${esc(u.username)}</td><td>${esc(u.fullname)}</td><td>${esc(u.department)}</td><td>${roleBadge(u.role)}</td>
+      <td style="white-space:nowrap"><button class="text-btn" onclick="openUserForm(${u.id})">แก้ไข</button><button class="text-btn del" onclick="deleteUser(${u.id})">ลบ</button></td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+async function openUserForm(id){
+  const u=id?(await API.get('/users')).find(x=>x.id===id):null;
+  openModal(u?'แก้ไขผู้ใช้':'เพิ่มผู้ใช้ใหม่',`<div class="form-grid">
+    <div class="fg"><label>Username</label><input id="ufUser" value="${esc(u?.username||'')}"></div>
+    <div class="fg"><label>Password</label><input id="ufPass" value="${esc(u?.password||'')}"></div>
+    <div class="fg full"><label>ชื่อ-นามสกุล</label><input id="ufName" value="${esc(u?.fullname||'')}"></div>
+    <div class="fg"><label>สังกัด/ฝ่าย</label><select id="ufDept">${(SETTINGS?.departments||[]).map(d=>`<option ${u?.department===d?'selected':''}>${esc(d)}</option>`).join('')}</select></div>
+    <div class="fg"><label>สิทธิ์</label><select id="ufRole"><option ${u?.role==='Admin'?'selected':''}>Admin</option><option ${!u||u.role==='Staff'?'selected':''}>Staff</option></select></div>
+  </div>`,[{t:'บันทึก',cls:'btn-primary',fn:()=>saveUser(id)}]);
+}
+async function saveUser(id){
+  const username=$('ufUser').value.trim(),password=$('ufPass').value.trim(),fullname=$('ufName').value.trim();
+  if(!username||!password||!fullname)return Swal.fire({icon:'warning',title:'กรุณากรอกข้อมูลให้ครบ'});
+  showSpin(true);
+  const payload={username,password,fullname,department:$('ufDept').value,role:$('ufRole').value};
+  if(id)await API.put('/users/'+id,payload);else await API.post('/users',payload);
+  localStorage.setItem('pwd_changed','1'); // เปลี่ยนรหัสแล้ว → ซ่อนรหัสตัวอย่างบนหน้า Login
+  showSpin(false);closeModal();Swal.fire({icon:'success',title:'บันทึกสำเร็จ',timer:1100,showConfirmButton:false});renderUsers();
+}
+function deleteUser(id){
+  if(id===SESSION.id)return Swal.fire({icon:'error',title:'ไม่สามารถลบตัวเองได้'});
+  Swal.fire({title:'ยืนยันลบผู้ใช้?',icon:'warning',showCancelButton:true,confirmButtonColor:'#c0392b',confirmButtonText:'ลบ',cancelButtonText:'ยกเลิก'}).then(async r=>{
+    if(!r.isConfirmed)return;showSpin(true);await API.del('/users/'+id);showSpin(false);
+    Swal.fire({icon:'success',title:'ลบแล้ว',timer:900,showConfirmButton:false});renderUsers();
+  });
+}
+let settingTab='general';
+async function renderSettings(){
+  if(!SETTINGS)SETTINGS=await API.get('/settings');
+  $('content').innerHTML=`<div class="panel">
+    <div class="tabs">
+      ${[['general','ทั่วไป'],['org','องค์กร/ติดต่อ'],['hr','ข้อมูลอ้างอิง HR'],['cat','ประเภทเอกสาร'],['storage','ฐานข้อมูล/API']].map(([k,l])=>`<button class="tab ${settingTab===k?'active':''}" onclick="settingTab='${k}';renderSettings()">${l}</button>`).join('')}
+    </div><div id="settingBody"></div></div>`;
+  const b=$('settingBody');
+  if(settingTab==='general')b.innerHTML=`<div style="max-width:480px">
+    <div class="fg"><label>ชื่อระบบ</label><input id="stName" value="${esc(SETTINGS.systemName||'')}"></div>
+    <div class="fg"><label>ชื่อองค์กร</label><input id="stOrg" value="${esc(SETTINGS.orgName||'')}"></div>
+    <button class="btn btn-primary" onclick="saveSettings(['systemName','orgName'])">บันทึก</button></div>`;
+  else if(settingTab==='org')b.innerHTML=`<div style="max-width:480px">
+    <div class="fg"><label>ที่อยู่</label><input id="stAddr" value="${esc(SETTINGS.address||'')}"></div>
+    <div class="fg"><label>เบอร์ ฝ่ายบริหาร</label><input id="stPhone1" value="${esc(SETTINGS.phones?.admin||'')}"></div>
+    <div class="fg"><label>เบอร์ ฝ่ายบัญชี</label><input id="stPhone2" value="${esc(SETTINGS.phones?.accounting||'')}"></div>
+    <div class="fg"><label>เบอร์ ฝ่ายไอที</label><input id="stPhone3" value="${esc(SETTINGS.phones?.it||'')}"></div>
+    <div class="fg"><label>อีเมลรับการแจ้งเตือน (ผู้บริหาร/ฝ่ายไอที) — คั่นด้วยเครื่องหมายจุลภาค</label><input id="stNotifEmails" placeholder="boss@freshywater.com, it@freshywater.com" value="${esc(SETTINGS.notifEmails||'')}"></div>
+    <div class="text-muted" style="font-size:11px">เมื่อมีคนเข้าระบบหรือแก้ไขไฟล์ ระบบจะบันทึก log และแจ้งเตือนไปยังอีเมลเหล่านี้ (ต้องเปิดใช้งาน Edge Function ดูใน DEPLOY-SUPABASE.md)</div>
+    <button class="btn btn-primary" onclick="saveSettings(['address','phones','notifEmails'])">บันทึก</button></div>`;
+  else if(settingTab==='hr')b.innerHTML=`<div style="max-width:560px">
+    ${[['positions','ตำแหน่ง'],['departments','หน่วยงาน/ฝ่าย'],['empTypes','ประเภทการจ้าง'],['salaryTypes','ประเภทเงินเดือน'],['statuses','สถานะพนักงาน']].map(([k,l])=>`
+      <div class="mb"><h4 style="font-size:13px;color:var(--navy);margin-bottom:8px">${l}</h4>
+        <div class="tag-list">${(SETTINGS[k]||[]).map((x,i)=>`<span class="tag">${esc(x)}<button onclick="SETTINGS.${k}.splice(${i},1);renderSettings()">×</button></span>`).join('')}</div>
+        <div class="flex mt"><input id="add_${k}" placeholder="เพิ่ม${l}ใหม่" style="flex:1;padding:8px 11px;border:1.5px solid var(--border);border-radius:7px"><button class="btn btn-primary btn-sm" onclick="const v=document.getElementById('add_${k}').value.trim();if(v){SETTINGS.${k}.push(v);renderSettings()}">+ เพิ่ม</button></div>
+      </div>`).join('')}
+    <button class="btn btn-primary" onclick="saveSettings(['positions','departments','empTypes','salaryTypes','statuses'])">บันทึกทั้งหมด</button></div>`;
+  else if(settingTab==='cat')b.innerHTML=`<div style="max-width:480px">
+    <h4 style="font-size:13px;color:var(--navy);margin-bottom:8px">ประเภทเอกสาร</h4>
+    <div class="tag-list">${(SETTINGS.categories||[]).map((x,i)=>`<span class="tag">${esc(x)}<button onclick="SETTINGS.categories.splice(${i},1);renderSettings()">×</button></span>`).join('')}</div>
+    <div class="flex mt"><input id="add_cat" placeholder="เพิ่มประเภทใหม่" style="flex:1;padding:8px 11px;border:1.5px solid var(--border);border-radius:7px"><button class="btn btn-primary btn-sm" onclick="const v=document.getElementById('add_cat').value.trim();if(v){SETTINGS.categories.push(v);renderSettings()}">+ เพิ่ม</button></div>
+    <div class="mt"><button class="btn btn-primary" onclick="saveSettings(['categories'])">บันทึก</button></div></div>`;
+  else b.innerHTML=`<div style="max-width:560px">
+    <div class="info-block"><h4>การเชื่อมต่อฐานข้อมูลกลาง (Supabase) — กรอกได้ตรงนี้ ไม่ต้องแก้โค้ด</h4>
+      <div class="info-row"><span>สถานะปัจจุบัน</span><b style="color:${sb?'#0f7d56':'#c0392b'}">${sb?'● เชื่อมต่อแล้ว (ข้อมูลแชร์ข้ามเครื่อง)':'● ยังไม่เชื่อมต่อ (เก็บในเบราว์เซอร์)'}</b></div>
+      <div class="fg"><label>Supabase Project URL</label><input id="sb_url" placeholder="https://xxxx.supabase.co" value="${esc(localStorage.getItem('sb_url')||'')}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:monospace;font-size:12px"></div>
+      <div class="fg"><label>Supabase Anon Public Key</label><input id="sb_key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="${esc(localStorage.getItem('sb_key')||'')}" style="width:100%;padding:9px 12px;border:1.5px solid var(--border);border-radius:7px;font-family:monospace;font-size:12px"></div>
+      <div class="mt"><button class="btn btn-primary" onclick="saveSbConfig()">บันทึกการเชื่อมต่อ</button> <span class="text-muted">หลังบันทึกให้รีเฟรชหน้าเพื่อเชื่อมต่อใหม่</span></div>
+    </div>
+    <div class="info-block mt"><h4>ที่เก็บข้อมูลจริง (ถ้ารันด้วย Server Node)</h4>
+      <div class="info-row"><span>ฐานข้อมูล</span><b style="font-family:monospace;font-size:11px">data/db.json</b></div>
+      <div class="info-row"><span>ไฟล์เอกสาร/รูป</span><b style="font-family:monospace;font-size:11px">data/files/</b></div>
+      <div class="info-row"><span>กำหนด path</span><b>แก้ใน config.json (DATA_PATH)</b></div>
+    </div>
+    <div class="text-muted mt">ถ้าใช้ Supabase ระบบจะเก็บข้อมูล+ไฟล์บนคลาวด์ แชร์ข้ามเครื่องได้ทันที ไม่ต้องรันเซิร์ฟเวอร์เอง<br>วิธีสร้างโปรเจกต์ฟรี: ดูไฟล์ DEPLOY-SUPABASE.md ในแพ็กเกจ</div></div>`;
+}
+function saveSbConfig(){
+  const u=($('sb_url')||{}).value||''; const k=($('sb_key')||{}).value||'';
+  if(u.trim()){localStorage.setItem('sb_url',u.trim())}else{localStorage.removeItem('sb_url')}
+  if(k.trim()){localStorage.setItem('sb_key',k.trim())}else{localStorage.removeItem('sb_key')}
+  Swal.fire({icon:'success',title:'บันทึกการตั้งค่าแล้ว',html:'ระบบจะเชื่อมต่อฐานข้อมูลกลางใหม่<br>กรุณากด <b>รีเฟรชหน้าเว็บ (F5)</b>',confirmButtonText:'รีเฟรชทันที'}).then(()=>location.reload());
+}
+async function saveSettings(keys){
+  const patch={};
+  if(keys.includes('systemName'))patch.systemName=$('stName').value.trim();
+  if(keys.includes('orgName'))patch.orgName=$('stOrg').value.trim();
+  if(keys.includes('address'))patch.address=$('stAddr').value.trim();
+  if(keys.includes('phones'))patch.phones={admin:$('stPhone1').value.trim(),accounting:$('stPhone2').value.trim(),it:$('stPhone3').value.trim()};
+  if(keys.includes('notifEmails'))patch.notifEmails=$('stNotifEmails').value.trim();
+  ['positions','departments','empTypes','salaryTypes','statuses','categories'].forEach(k=>{if(keys.includes(k))patch[k]=SETTINGS[k]});
+  showSpin(true);
+  let saved=false;
+  if(sb){try{const full={...SETTINGS,...patch};await sb.from('settings').upsert({id:'main',value:full});SETTINGS=full;saved=true}catch(e){}}
+  if(!saved){try{const r=await fetch('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});if(r.ok){const j=await r.json();SETTINGS=j.settings;saved=true}}catch(e){}}
+  if(!saved){Object.assign(SETTINGS,patch);const d=lsDB();d.settings=SETTINGS;lsSave(d)}
+  showSpin(false);
+  if(patch.systemName)$('sideSysName').innerHTML=esc(patch.systemName)+'<small>'+esc(SETTINGS.orgName||'')+'</small>';
+  Swal.fire({icon:'success',title:'บันทึกการตั้งค่าแล้ว',timer:1100,showConfirmButton:false});
+}
+
+/* ==================== Modal Helper ==================== */
+function openModal(title,bodyHTML,footers,gold){
+  $('modalTitle').textContent=title;
+  $('modalHead').classList.toggle('gold',!!gold);
+  $('modalBody').innerHTML=bodyHTML;
+  const ft=footers||[{t:'ปิด',cls:'btn-outline',fn:closeModal}];
+  $('modalFoot').innerHTML=ft.map((f,i)=>`<button class="btn ${f.cls}" data-fidx="${i}">${f.t}</button>`).join('');
+  $('modalFoot').querySelectorAll('button').forEach((b,i)=>b.onclick=ft[i]?.fn||closeModal);
+  $('modalMask').classList.add('show');
+}
+function closeModal(){$('modalMask').classList.remove('show')}
+
+/* ==================== Init ==================== */
+(async function init(){
+  updateNet();
+  seedLS();
+  renderPubDocs();
+})();
+</script>
+</body>
+</html>
