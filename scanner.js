@@ -2,6 +2,12 @@
   'use strict';
 
   const cameraIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6h4l2-2h4l2 2h4a2 2 0 0 1 2 2v11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2Z"/><circle cx="12" cy="13" r="4"/></svg>';
+  function icon(path) {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + path + '</svg>';
+  }
+  const castIcon = icon('<path d="M3 15V5h18v13h-5m-13 1h.01M3 15a4 4 0 0 1 4 4m-4-8a8 8 0 0 1 8 8"/>');
+  const fileIcon = icon('<path d="M7 3h7l4 4v14H6V3zm7 0v5h4M9 12h6m-6 4h6"/>');
+  const expandIcon = icon('<path d="M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5"/>');
   const sample = document.createElement('canvas');
   const sampleContext = sample.getContext('2d', { willReadFrequently: true });
   let active;
@@ -36,6 +42,9 @@
     const status = state.find('status');
     if (status.textContent !== message) status.textContent = message;
     status.dataset.kind = kind;
+    if (state.secret && state.pairReady && state.lastCastStatus !== message + kind) {
+      if (state.pair?.send({ type: 'scan-status', message, kind })) state.lastCastStatus = message + kind;
+    }
   }
 
   function stopCamera(state, keepRemote = false) {
@@ -50,17 +59,28 @@
     video.srcObject = null;
     video.hidden = true;
     state.find('guide').hidden = true;
+    state.find('view-source').textContent = 'พร้อมสแกน';
+    if (!keepRemote) setMonitor(state, false);
     if (!keepRemote && state.remote) {
       state.pair?.close();
       state.pair = null;
       state.remote = false;
       state.find('pair-toggle').hidden = false;
+      state.find('monitor').hidden = true;
       state.find('pair-panel').hidden = true;
+      state.find('auto').disabled = false;
+      state.find('auto').checked = state.localAuto ?? true;
     }
     state.find('shutter').hidden = true;
+    state.find('register-jump').hidden = true;
     state.find('stop').hidden = true;
     state.find('start').hidden = false;
     state.find('start').disabled = state.busy;
+    if (state.secret) {
+      state.find('preview').hidden = true;
+      state.find('next').hidden = true;
+      state.hold = false;
+    }
     state.find('empty').hidden = !!state.current;
   }
 
@@ -84,16 +104,28 @@
     root.innerHTML = `
       <section class="scan-page ${secret ? 'scan-phone' : ''}" aria-labelledby="scan-heading">
         <header class="scan-banner">
-          ${cameraIcon}
-          <div><small>FRESHY WATER <span></span> งานสารบรรณ</small>
-            <h1 id="scan-heading">สแกนเอกสารด้วยกล้อง</h1>
-            <p>${secret ? 'ใช้กล้องมือถือส่งภาพและกรอบไปยังหน้าจอคอมพิวเตอร์ที่จับคู่' : 'ถ่ายภาพ ตัดขอบ และตรวจเอกสารก่อนเข้าทะเบียน'}</p></div>
-          <button type="button" class="scan-button scan-connect" data-scan="pair-toggle" ${secret ? 'hidden' : ''}>เชื่อมกล้องมือถือ</button>
+          <div class="scan-banner-text"><small>FRESHY WATER <span></span> งานสารบรรณดิจิทัล</small>
+            <h1 id="scan-heading">${secret ? 'สแกนจากมือถือ' : 'ศูนย์สแกนเอกสาร'}</h1>
+            <p>${secret ? 'ภาพสแกนและกรอบจะแสดงบนคอมพิวเตอร์ที่เชื่อมอยู่' : 'สแกน ตัดขอบ และลงทะเบียนเอกสารในหน้าเดียว'}</p></div>
+          <div class="scan-banner-art" aria-hidden="true"><i></i><i></i><b>${fileIcon}</b></div>
         </header>
+        ${secret ? '' : `<nav class="scan-jump" aria-label="เมนูงานสแกน">
+          <a href="#scan-camera-heading" aria-current="true">${cameraIcon} สแกนเอกสาร</a>
+          <a href="#scan-register-heading">${fileIcon} ทะเบียนสแกน</a>
+        </nav>`}
+        <section class="scan-cast-bar" ${secret ? 'hidden' : ''}>
+          <div class="scan-cast-icon">${castIcon}</div>
+          <div><h2>แคสหน้าสแกนขึ้นคอม</h2><p>ดูภาพสด กรอบสี่มุม และรูปหลังตัดขอบ</p></div>
+          <button type="button" class="scan-button primary scan-connect" data-scan="pair-toggle" ${secret ? 'hidden' : ''}>เชื่อมด้วย QR</button>
+        </section>
         <div class="scan-grid">
-          <section class="scan-card" aria-labelledby="scan-camera-heading">
-            <div class="scan-head"><h2 id="scan-camera-heading">ภาพจากกล้อง</h2>
-              <label class="scan-auto"><input data-scan="auto" type="checkbox" checked> ถ่ายอัตโนมัติ</label></div>
+          <section class="scan-card" aria-labelledby="scan-camera-heading" data-scan="camera-card">
+            <div class="scan-head"><div><h2 id="scan-camera-heading" tabindex="-1">ช่องมองภาพ</h2>
+              <p class="scan-source" data-scan="view-source">พร้อมสแกน</p></div>
+              <div class="scan-actions scan-tools">
+                <label class="scan-auto"><input data-scan="auto" type="checkbox" role="switch" checked> ถ่ายอัตโนมัติ</label>
+                <button type="button" class="scan-button" data-scan="monitor" aria-pressed="false" hidden>${expandIcon}<span>ขยายจอ</span></button>
+              </div></div>
             <div class="scan-pair-panel" data-scan="pair-panel" hidden>
               <canvas width="156" height="156" data-scan="qr" hidden aria-label="QR เชื่อมกล้องมือถือ"></canvas>
               <div><strong>เชื่อมกล้องมือถือกับคอมพิวเตอร์</strong>
@@ -131,6 +163,7 @@
               <button class="scan-button" data-scan="pick">เลือกภาพจากเครื่อง</button>
               <button class="scan-button" data-scan="next" hidden>สแกนหน้าถัดไป</button>
               <button class="scan-button" data-scan="crop" hidden>ปรับมุมกระดาษ</button>
+              <button class="scan-button primary" data-scan="register-jump" hidden>ตรวจและลงทะเบียน</button>
               <input data-scan="file" type="file" accept="image/*" hidden ${secret ? 'capture="environment"' : ''}>
             </div>
           </section>
@@ -152,10 +185,17 @@
           </section>
         </div>
         <section class="scan-card scan-register" aria-labelledby="scan-register-heading">
-          <div class="scan-head"><h2 id="scan-register-heading">ทะเบียนเอกสารที่สแกน</h2></div>
+          <div class="scan-head"><h2 id="scan-register-heading" tabindex="-1">ทะเบียนเอกสารที่สแกน</h2></div>
           <p class="scan-description" data-scan="summary"></p>
           <ul class="scan-records" data-scan="list"></ul>
         </section>
+        <details class="scan-card scan-bottom">
+          <summary>แคสทั้งหน้าจอ Xiaomi ไป Windows</summary>
+          <p class="scan-description">บน Windows เปิดแอป Wireless Display จากการตั้งค่า ระบบ → การฉายภาพไปยังพีซีเครื่องนี้ หากยังไม่มีแอป ให้ติดตั้งจากคุณลักษณะเสริมก่อน</p>
+          <p class="scan-description">บน Xiaomi เปิดศูนย์ควบคุม → แคสต์ (Cast) แล้วเลือกชื่อคอมพิวเตอร์ที่รองรับ Miracast</p>
+          <a href="https://support.microsoft.com/en-gb/windows/hardware/display-graphics/screen-mirroring-and-projecting-to-your-pc-or-wireless-display" target="_blank" rel="noopener">คู่มือ Windows</a>
+          <a href="https://www.mi.com/global/support/article/KA-36318/" target="_blank" rel="noopener">คู่มือ Xiaomi</a>
+        </details>
         <details class="scan-card scan-bottom">
           <summary>โหมดทดลองสแกนจากเครื่องพิมพ์</summary>
           <p class="scan-description">แสดงข้อมูลตัวอย่างเพื่อทดสอบหน้าจอ</p>
@@ -186,11 +226,32 @@
     state.find('next').onclick = () => {
       state.hold = false;
       state.steadySince = 0;
+      state.find('preview').hidden = true;
+      state.find('video').hidden = false;
+      state.find('guide').hidden = true;
+      state.find('view-source').textContent = 'กำลังแคสไปยังคอมพิวเตอร์';
       state.find('next').hidden = true;
       state.find('shutter').hidden = false;
       state.pair?.send({ type: 'resume' });
       label(state, 'จัดเอกสารหน้าถัดไปในกรอบ');
     };
+    state.find('monitor').onclick = () => setMonitor(state, !state.monitor);
+    state.find('register-jump').onclick = () => {
+      setMonitor(state, false);
+      const title = state.find('form').elements.title;
+      title.focus();
+      title.scrollIntoView({ block: 'center' });
+    };
+    for (const anchor of root.querySelectorAll('.scan-jump a')) {
+      anchor.onclick = event => {
+        event.preventDefault();
+        const target = root.querySelector(anchor.getAttribute('href'));
+        target.focus({ preventScroll: true });
+        target.scrollIntoView({ block: 'start' });
+        root.querySelector('.scan-jump [aria-current]')?.removeAttribute('aria-current');
+        anchor.setAttribute('aria-current', 'true');
+      };
+    }
     state.find('pair-toggle').onclick = () => hostCamera(state);
     state.find('pair-close').onclick = () => {
       stopCamera(state);
@@ -207,7 +268,10 @@
       state.find('next').disabled = true;
       label(state, 'เปิดกล้องเพื่ออนุญาตให้คอมพิวเตอร์ที่จับคู่เห็นภาพและกรอบ');
     }
-    state.find('auto').onchange = () => { state.steadySince = 0; };
+    state.find('auto').onchange = () => {
+      state.steadySince = 0;
+      if (state.secret) state.pair?.send({ type: 'scan-mode', auto: state.find('auto').checked });
+    };
     state.find('pick').onclick = () => state.find('file').click();
     state.find('file').onchange = event => {
       const input = event.currentTarget;
@@ -287,9 +351,11 @@
     preview.src = state.imageUrl;
     preview.hidden = false;
     state.find('empty').hidden = true;
+    state.find('view-source').textContent = 'ตรวจภาพเอกสาร';
     state.find('start').querySelector('span').textContent = 'ถ่ายภาพใหม่';
     state.find('save').disabled = state.busy;
     state.find('crop').hidden = !!state.secret;
+    state.find('register-jump').hidden = !!state.secret;
     if (populate) {
       const fields = state.find('form').elements;
       fields.title.value = item.title || '';
@@ -414,6 +480,14 @@
       blob, width, height, updatedAt: time };
     if (state.secret) {
       state.hold = true;
+      if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
+      state.imageUrl = URL.createObjectURL(blob);
+      const preview = state.find('preview');
+      preview.src = state.imageUrl;
+      preview.hidden = false;
+      state.find('video').hidden = true;
+      state.find('guide').hidden = true;
+      state.find('view-source').textContent = 'ภาพที่ตัดขอบแล้ว';
       state.find('shutter').hidden = true;
       state.find('next').hidden = true;
       label(state, 'กำลังส่งภาพที่ตัดขอบให้คอมพิวเตอร์');
@@ -523,6 +597,7 @@
       await video.play();
       if (active !== state || attempt !== state.cameraAttempt) return;
       state.find('guide').hidden = false;
+      state.find('view-source').textContent = 'กล้องเครื่องนี้';
       state.find('shutter').hidden = !!state.secret;
       start.hidden = true;
       if (state.secret) {
@@ -533,6 +608,9 @@
           ready: () => {
             if (active !== state || !state.stream) return;
             state.pairReady = true;
+            state.lastCastStatus = null;
+            state.pair?.send({ type: 'scan-mode', auto: state.find('auto').checked });
+            state.find('view-source').textContent = 'กำลังแคสไปยังคอมพิวเตอร์';
             state.find('shutter').hidden = false;
             label(state, 'เชื่อมกับคอมพิวเตอร์แล้ว จัดกระดาษให้ครบสี่มุม', 'good');
           },
@@ -575,6 +653,24 @@
     }
   }
 
+  function setMonitor(state, expanded) {
+    const card = state.find('camera-card');
+    if (state.monitor === expanded && !expanded) return;
+    state.monitor = expanded;
+    if (expanded) {
+      card.classList.add('scan-expanded');
+      state.monitorEscape = event => { if (event.key === 'Escape') setMonitor(state, false); };
+      card.addEventListener('keydown', state.monitorEscape);
+    } else {
+      card.classList.remove('scan-expanded');
+      if (state.monitorEscape) card.removeEventListener('keydown', state.monitorEscape);
+    }
+    const button = state.find('monitor');
+    button.setAttribute('aria-pressed', String(expanded));
+    button.querySelector('span').textContent = expanded ? 'ย่อจอ' : 'ขยายจอ';
+    if (expanded || document.activeElement === button) button.focus();
+  }
+
   function hostCamera(state) {
     if (state.busy) return;
     stopCamera(state);
@@ -590,6 +686,10 @@
     state.find('pair-close').textContent = 'ยกเลิก';
     state.find('pair-toggle').hidden = true;
     state.remote = true;
+    state.localAuto = state.find('auto').checked;
+    state.find('auto').disabled = true;
+    state.find('view-source').textContent = 'รอเชื่อมต่อมือถือ';
+    state.find('start').hidden = true;
     let stream;
     const showRemote = async () => {
       if (!stream || active !== state || !state.remote) return;
@@ -601,8 +701,10 @@
       video.hidden = false;
       state.find('guide').hidden = true;
       state.find('crop').hidden = true;
+      state.find('register-jump').hidden = true;
       state.find('start').hidden = true;
       state.find('shutter').hidden = false;
+      state.find('view-source').textContent = 'ภาพสดจากมือถือ';
       try { await video.play(); }
       catch { if (active === state) label(state, 'เปิดภาพกล้องไม่ได้ กรุณาเชื่อมใหม่', 'error'); }
     };
@@ -631,13 +733,14 @@
           if (active !== state || !state.remote) return;
           qr.hidden = true;
           copy.hidden = true;
+          state.find('monitor').hidden = false;
           state.find('pair-close').textContent = 'ตัดการเชื่อมต่อ';
           message.textContent = 'เชื่อมกล้องมือถือแล้ว สามารถดูกรอบและกดถ่ายจากคอมพิวเตอร์';
         },
         video: live => { stream = live; showRemote(); },
         frame: data => {
           if (active !== state || !state.remote || state.find('video').hidden) return;
-          const { width, height, points, ready, message } = data;
+          const { width, height, points, ready } = data;
           if (!Number.isInteger(width) || width < 1 || width > 320 ||
               !Number.isInteger(height) || height < 1 || height > 320) return;
           if (points && (!Array.isArray(points) || points.length !== 4 || !points.every(point =>
@@ -646,7 +749,13 @@
           const guide = state.find('guide');
           drawGuide(guide, { width, height, points }, ready);
           guide.hidden = false;
-          if (typeof message === 'string') label(state, message.slice(0, 120), ready ? 'good' : '');
+        },
+        scanStatus: ({ message, kind }) => {
+          if (!state.remote || active !== state || typeof message !== 'string') return;
+          if (!state.find('video').hidden) label(state, message.slice(0, 120), ['good','error'].includes(kind) ? kind : '');
+        },
+        scanMode: ({ auto }) => {
+          if (state.remote && active === state && typeof auto === 'boolean') state.find('auto').checked = auto;
         },
         resume: showRemote,
         image: async (blob, width, height) => {
@@ -661,7 +770,10 @@
             setBusy(state, true);
             const saved = await storeBlob(state, blob, width, height);
             if (saved && active === state) state.pair?.send({ type: 'received' });
-            if (active === state) state.find('start').hidden = true;
+            if (active === state) {
+              state.find('start').hidden = true;
+              state.find('view-source').textContent = 'ภาพที่ตัดขอบแล้ว';
+            }
           } catch {
             if (active === state) label(state, 'เปิดภาพที่ส่งมาจากมือถือไม่ได้', 'error');
           } finally {
@@ -672,6 +784,11 @@
           if (active !== state || !state.remote) return;
           label(state, text, kind);
           message.textContent = text;
+          state.find('pair-close').textContent = 'ปิดแล้วลองใหม่';
+          if (state.find('video').hidden) {
+            qr.hidden = true;
+            copy.hidden = true;
+          }
         },
         disconnected: () => {
           if (active !== state || !state.remote) return;
@@ -863,11 +980,11 @@
     const previous = state.previous;
     state.previous = frame;
     const ready = frame.points && !frame.issue;
-    drawGuide(state.find('guide'), frame, ready);
-    const message = !ready ? frame.issue || 'จัดเอกสารให้ครบ 4 มุม'
-      : state.find('auto').checked ? 'ภาพชัดแล้ว กรุณาถือโทรศัพท์ให้นิ่ง' : 'ภาพชัดแล้ว กดถ่ายตอนนี้ได้';
+    const guide = state.find('guide');
+    drawGuide(guide, frame, ready);
+    guide.hidden = false;
     if (state.secret) state.pair?.send({
-      type: 'frame', width: frame.width, height: frame.height, points: frame.points, ready: !!ready, message
+      type: 'frame', width: frame.width, height: frame.height, points: frame.points, ready: !!ready
     });
     if (!ready) {
       state.steadySince = 0;

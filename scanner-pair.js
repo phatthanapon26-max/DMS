@@ -122,7 +122,10 @@
         if (typeof data === 'string') {
           let message;
           try { message = JSON.parse(data); } catch { return; }
+          if (!message || typeof message !== 'object') return;
           if (message.type === 'frame' && receivesImage) events.frame?.(message);
+          if (message.type === 'scan-status' && receivesImage) events.scanStatus?.(message);
+          if (message.type === 'scan-mode' && receivesImage) events.scanMode?.(message);
           if (message.type === 'capture' && !receivesImage) events.capture?.();
           if (message.type === 'resume' && receivesImage) events.resume?.();
           if (message.type === 'received' && !receivesImage) events.received?.();

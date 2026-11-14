@@ -67,3 +67,70 @@ body:has(.scan-page) .side-item.active{background:#d8edff;color:#123154}
 .scan-phone .scan-grid>section:nth-of-type(2),.scan-phone .scan-register,.scan-phone .scan-bottom{display:none}
 @media(max-width:740px){.scan-grid{grid-template-columns:1fr}.scan-banner{padding:15px;gap:12px;margin-bottom:13px;flex-wrap:wrap;border-radius:19px}.scan-banner>svg{width:44px;height:44px;padding:9px;border-radius:13px}.scan-banner p{font-size:13px}.scan-connect{width:100%}.scan-card{padding:13px;border-radius:17px}.scan-stage{min-height:230px;max-height:57svh;aspect-ratio:1/1}.scan-records li{align-items:flex-start}}
 @media(max-width:375px){.scan-fields{grid-template-columns:1fr;gap:0}}
+
+/* Service header, casting controls and the two-device viewing surface. */
+body:has(.scan-page) .content{background:linear-gradient(180deg,#d5ecff 0,#ecf6ff 265px,#f5f9fd 570px)}
+.scan-page{--ink:#122943;--blue:#0868d4;--edge:#dbe7f2}
+.scan-banner{position:relative;min-height:175px;overflow:hidden;align-items:center;padding:27px 32px;margin-bottom:13px;border-radius:28px;color:#fff;border-color:#75baff;background:radial-gradient(ellipse at 92% 5%,#3b9dfb 0,transparent 55%),linear-gradient(120deg,#0752b0,#0879e5 70%,#1c8bee);box-shadow:0 14px 30px #1e6cbe30}
+.scan-banner-text{position:relative;z-index:1}
+.scan-banner small{color:#fff;gap:9px;letter-spacing:.05em;font-size:12px}
+.scan-banner small span{background:#a5d9ff}
+.scan-banner h1{margin:6px 0 4px;font-size:clamp(28px,4.5vw,47px);font-weight:800}
+.scan-banner p{color:#f4faff;font-size:15px}
+.scan-banner-art{position:absolute;right:7.5%;top:50%;width:122px;height:102px;transform:translateY(-49%) rotate(-12deg);pointer-events:none}
+.scan-banner-art i,.scan-banner-art b{position:absolute;width:85px;height:103px;border-radius:18px;border:1px solid #d8f1ff99;background:#b5e3ff40}
+.scan-banner-art i:first-child{right:0;transform:rotate(23deg) translateY(2px)}
+.scan-banner-art i:nth-child(2){right:15px;transform:rotate(11deg);background:#c9eaff50}
+.scan-banner-art b{display:grid;place-items:center;right:31px;background:linear-gradient(155deg,#ddf3ff,#8ac7ff);color:#0956ae;box-shadow:0 8px 18px #053e8260}
+.scan-banner-art svg{width:37px;height:37px}
+.scan-jump{display:flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:4px;margin-bottom:15px;border-radius:40px;background:#fffdfd;border:1px solid #fff;box-shadow:0 5px 16px #4e80bb18}
+.scan-jump a{display:flex;align-items:center;justify-content:center;gap:7px;min-height:38px;padding:5px 15px;border-radius:30px;font-weight:700;color:#355a7c}
+.scan-jump a[aria-current="true"]{color:#fff;background:linear-gradient(115deg,#085dbf,#087ce2)}
+.scan-jump svg{width:16px;height:16px}
+#scan-camera-heading,#scan-register-heading{scroll-margin:80px}
+.scan-cast-bar{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:13px;padding:13px 15px;border:1px solid #d1e7fc;border-radius:22px;background:#fdfefe;margin-bottom:16px;box-shadow:0 7px 20px #285eb215}
+.scan-cast-icon{display:grid;place-items:center;width:46px;height:46px;border-radius:14px;color:#0b63c5;background:linear-gradient(155deg,#ecf7ff,#cce7ff);box-shadow:inset 0 1px 2px #fff}
+.scan-cast-icon svg{width:25px;height:25px}
+.scan-cast-bar h2{font-size:16px}
+.scan-cast-bar p,.scan-source{color:#476582;font-size:13px}
+.scan-page .scan-connect{border:0;min-height:43px;padding-inline:18px;background:linear-gradient(125deg,#0764ce,#057fe4);color:white}
+.scan-card{border-radius:24px;box-shadow:0 9px 28px #37689812}
+.scan-head{flex-wrap:wrap}
+.scan-head h2{font-size:19px}
+.scan-source{margin-top:1px}
+.scan-auto{padding:6px 9px;color:#254f75;background:#eff6fe}
+.scan-auto input{appearance:none;width:32px;height:19px;position:relative;border:1px solid #8ba3bb;border-radius:30px;background:#b4c5d7;cursor:pointer}
+.scan-auto input::before{content:'';width:13px;height:13px;border-radius:50%;background:white;position:absolute;left:2px;top:2px}
+.scan-auto input:checked{background:#126ed0;border-color:#126ed0}
+.scan-auto input:checked::before{left:15px}
+.scan-auto input:disabled{opacity:.7;cursor:default}
+.scan-stage:has(.scan-empty:not([hidden])){background:radial-gradient(ellipse at 50% 43%,#ecf7ff,#ddebfb);border:1px dashed #9dbde0;color:#173d65}
+.scan-stage:has(.scan-empty:not([hidden])) .scan-empty p{color:#456487}
+.scan-stage:has(.scan-empty:not([hidden])) .scan-glyph{color:#0e65c2;filter:drop-shadow(0 2px 5px #fff)}
+.scan-button{border-radius:13px}
+.scan-crop-editor,.scan-pair-panel{border-radius:16px}
+.scan-card details a,.scan-bottom a{margin-right:15px;font-weight:700;color:#075cae;text-decoration:underline}
+.scan-card.scan-expanded{position:fixed;z-index:400;inset:12px;padding:15px;display:flex;flex-direction:column;overflow:auto;margin:0;background:#f7fbff;box-shadow:0 0 0 100vmax #0b2347c9}
+.scan-expanded .scan-stage{flex:1 0 260px;aspect-ratio:auto;width:100%;max-height:none}
+.scan-expanded .scan-pair-panel{flex:none}
+.scan-expanded:has(.scan-crop-editor:not([hidden])) .scan-stage{min-height:170px;flex-basis:170px}
+.scan-phone .scan-banner{min-height:140px}
+.scan-phone .scan-banner-art{display:none}
+.scan-phone .scan-cast-bar,.scan-phone .scan-jump{display:none}
+.scan-phone .scan-stage:has(video:not([hidden])){aspect-ratio:4/5;max-height:59svh}
+.scan-phone .scan-card>.scan-actions .primary{flex:1}
+.scan-phone .scan-card>.scan-actions .scan-button:not(.primary){min-width:100px}
+@media(max-width:740px){
+  body:has(.scan-page) .content{padding:13px}
+  .scan-banner{min-height:136px;padding:17px 15px;border-radius:23px}
+  .scan-banner p{max-width:33ch;font-size:13px}
+  .scan-banner-art{display:none}
+  .scan-cast-bar{padding:10px;gap:8px;border-radius:17px}
+  .scan-cast-bar h2{font-size:14px}.scan-cast-bar p{font-size:12px}
+  .scan-cast-icon{width:34px;height:34px;border-radius:10px}.scan-cast-icon svg{width:21px;height:21px}
+  .scan-page .scan-connect{width:auto;padding-inline:10px;font-size:13px}
+  .scan-card{border-radius:20px}
+  .scan-jump{margin-bottom:11px}
+  .scan-expanded{inset:6px!important}
+}
+@media(prefers-reduced-motion:reduce){.scan-page *, .scan-page *::before{scroll-behavior:auto;transition:none}}
