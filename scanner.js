@@ -38,9 +38,10 @@
     status.dataset.kind = kind;
   }
 
-  function stopCamera(state) {
+  function stopCamera(state, keepRemote = false) {
     state.cameraAttempt++;
     clearInterval(state.timer);
+    clearTimeout(state.confirmTimer);
     state.stream?.getTracks().forEach(track => track.stop());
     state.stream = null;
     state.previous = null;
@@ -49,6 +50,13 @@
     video.srcObject = null;
     video.hidden = true;
     state.find('guide').hidden = true;
+    if (!keepRemote && state.remote) {
+      state.pair?.close();
+      state.pair = null;
+      state.remote = false;
+      state.find('pair-toggle').hidden = false;
+      state.find('pair-panel').hidden = true;
+    }
     state.find('shutter').hidden = true;
     state.find('stop').hidden = true;
     state.find('start').hidden = false;
@@ -58,6 +66,7 @@
 
   function close() {
     if (!active) return;
+    active.pair?.close();
     stopCamera(active);
     if (active.imageUrl) URL.revokeObjectURL(active.imageUrl);
     active = null;
@@ -70,26 +79,49 @@
     return ['year', 'month', 'day'].map(type => date.find(part => part.type === type).value).join('-');
   }
 
-  function mount(root, user) {
+  function mount(root, user, secret = null) {
     close();
     root.innerHTML = `
-      <section class="scan-page" aria-labelledby="scan-heading">
+      <section class="scan-page ${secret ? 'scan-phone' : ''}" aria-labelledby="scan-heading">
         <header class="scan-banner">
           ${cameraIcon}
-          <div><small>โรงน้ำดื่ม เฟรชชี่ วอเตอร์ · งานสารบรรณ</small>
+          <div><small>FRESHY WATER <span></span> งานสารบรรณ</small>
             <h1 id="scan-heading">สแกนเอกสารด้วยกล้อง</h1>
-            <p>วางเอกสารบนพื้นเรียบ แล้วถือโทรศัพท์เหนือเอกสารให้เห็นครบทั้ง 4 มุม</p></div>
+            <p>${secret ? 'ใช้กล้องมือถือส่งภาพและกรอบไปยังหน้าจอคอมพิวเตอร์ที่จับคู่' : 'ถ่ายภาพ ตัดขอบ และตรวจเอกสารก่อนเข้าทะเบียน'}</p></div>
+          <button type="button" class="scan-button scan-connect" data-scan="pair-toggle" ${secret ? 'hidden' : ''}>เชื่อมกล้องมือถือ</button>
         </header>
         <div class="scan-grid">
           <section class="scan-card" aria-labelledby="scan-camera-heading">
-            <div class="scan-head"><h2 id="scan-camera-heading">กล้องและภาพเอกสาร</h2>
+            <div class="scan-head"><h2 id="scan-camera-heading">ภาพจากกล้อง</h2>
               <label class="scan-auto"><input data-scan="auto" type="checkbox" checked> ถ่ายอัตโนมัติ</label></div>
+            <div class="scan-pair-panel" data-scan="pair-panel" hidden>
+              <canvas width="156" height="156" data-scan="qr" hidden aria-label="QR เชื่อมกล้องมือถือ"></canvas>
+              <div><strong>เชื่อมกล้องมือถือกับคอมพิวเตอร์</strong>
+                <p data-scan="pair-message" role="status">กำลังสร้าง QR</p>
+                <div class="scan-actions">
+                  <button type="button" class="scan-button" data-scan="copy" hidden>คัดลอกลิงก์</button>
+                  <button type="button" class="scan-button" data-scan="pair-close">ยกเลิก</button>
+                </div>
+              </div>
+            </div>
             <div class="scan-stage">
               <div class="scan-empty" data-scan="empty"><span class="scan-glyph">${cameraIcon}</span>
-                <strong>พร้อมสแกนเอกสาร</strong><p>ใช้พื้นหลังสีเข้มและจัดแสงให้ทั่วแผ่น</p></div>
+                <strong>จัดเอกสารให้ครบ 4 มุม</strong><p>วางบนพื้นเรียบ สีตัดกับกระดาษ แล้วถือโทรศัพท์ให้นิ่ง</p></div>
               <video data-scan="video" playsinline muted hidden></video>
               <canvas data-scan="guide" aria-hidden="true" hidden></canvas>
               <img data-scan="preview" alt="ตัวอย่างภาพเอกสารที่สแกน" hidden>
+            </div>
+            <div class="scan-crop-editor" data-scan="crop-editor" hidden>
+              <p>ลากจุดทั้ง 4 ให้ตรงมุมกระดาษ หรือใช้ปุ่มลูกศรเมื่อเลือกจุด</p>
+              <div class="scan-crop-surface" data-scan="crop-surface">
+                <canvas data-scan="crop-canvas" aria-hidden="true"></canvas>
+                ${['บนซ้าย','บนขวา','ล่างขวา','ล่างซ้าย'].map((corner, index) =>
+                  `<button type="button" data-corner="${index}" aria-label="ปรับมุม${corner}"></button>`).join('')}
+              </div>
+              <div class="scan-actions">
+                <button type="button" class="scan-button primary" data-scan="crop-apply">ตัดตามกรอบ</button>
+                <button type="button" class="scan-button" data-scan="crop-cancel">ยกเลิก</button>
+              </div>
             </div>
             <div class="scan-status" data-scan="status" role="status">เปิดกล้องหรือเลือกภาพเอกสารจากเครื่อง</div>
             <div class="scan-actions">
@@ -97,12 +129,14 @@
               <button class="scan-button primary" data-scan="shutter" hidden>ถ่ายตอนนี้</button>
               <button class="scan-button" data-scan="stop" hidden>ปิดกล้อง</button>
               <button class="scan-button" data-scan="pick">เลือกภาพจากเครื่อง</button>
-              <input data-scan="file" type="file" accept="image/*" hidden>
+              <button class="scan-button" data-scan="next" hidden>สแกนหน้าถัดไป</button>
+              <button class="scan-button" data-scan="crop" hidden>ปรับมุมกระดาษ</button>
+              <input data-scan="file" type="file" accept="image/*" hidden ${secret ? 'capture="environment"' : ''}>
             </div>
           </section>
           <section class="scan-card" aria-labelledby="scan-details-heading">
-            <h2 id="scan-details-heading">ข้อมูลและที่จัดเก็บ</h2>
-            <p class="scan-description">ภาพถ่ายจะถูกเก็บเป็นฉบับร่างทันที แล้วจึงตั้งชื่อและลงทะเบียนได้</p>
+            <h2 id="scan-details-heading">ลงทะเบียนเอกสาร</h2>
+            <p class="scan-description">ตั้งชื่อและระบุตำแหน่งต้นฉบับหลังตรวจภาพ</p>
             <form data-scan="form">
               <label class="scan-field">ชื่อเอกสาร <span aria-hidden="true">*</span>
                 <input name="title" required maxlength="120" placeholder="เช่น หนังสือส่งมอบงาน"></label>
@@ -114,7 +148,7 @@
               </div>
               <button class="scan-button primary scan-submit" data-scan="save" type="submit" disabled>บันทึกเข้าทะเบียนสแกน</button>
             </form>
-            <p class="scan-note">ภาพและทะเบียนสแกนเก็บในเบราว์เซอร์นี้ ข้อมูลอาจหายเมื่อล้างข้อมูลเว็บไซต์</p>
+            <p class="scan-note">ทะเบียนเก็บในเบราว์เซอร์เครื่องที่บันทึก สามารถดาวน์โหลด JPG หรือ PDF จากรายการด้านล่าง</p>
           </section>
         </div>
         <section class="scan-card scan-register" aria-labelledby="scan-register-heading">
@@ -131,19 +165,48 @@
       </section>`;
 
     const state = {
-      owner: String(user.username || user.id), cameraAttempt: 0, steadySince: 0,
+      owner: String(user?.username || user?.id || ''), secret, cameraAttempt: 0, steadySince: 0,
       find: name => root.querySelector(`[data-scan="${name}"]`)
     };
     active = state;
     state.find('form').elements.date.value = thaiDateInput();
     state.find('form').onsubmit = event => saveRecord(state, event);
-    state.find('start').onclick = () => startCamera(state);
+    state.find('start').onclick = () => { if (state.remote) stopCamera(state); startCamera(state); };
     state.find('stop').onclick = () => {
+      if (state.secret) {
+        state.pair?.close();
+        state.pairReady = false;
+        state.find('next').hidden = true;
+      }
       stopCamera(state);
       if (state.current) showImage(state, state.current);
       label(state, 'ปิดกล้องแล้ว');
     };
-    state.find('shutter').onclick = () => takePhoto(state, false);
+    state.find('shutter').onclick = () => state.remote ? state.pair?.send({ type: 'capture' }) : takePhoto(state, false);
+    state.find('next').onclick = () => {
+      state.hold = false;
+      state.steadySince = 0;
+      state.find('next').hidden = true;
+      state.find('shutter').hidden = false;
+      state.pair?.send({ type: 'resume' });
+      label(state, 'จัดเอกสารหน้าถัดไปในกรอบ');
+    };
+    state.find('pair-toggle').onclick = () => hostCamera(state);
+    state.find('pair-close').onclick = () => {
+      stopCamera(state);
+      if (state.current) showImage(state, state.current);
+      label(state, 'ปิดการเชื่อมต่อมือถือแล้ว');
+    };
+    state.find('crop').onclick = () => editCrop(state,
+      state.cropSource || state.current?.blob, state.cropPoints);
+
+    state.find('crop-cancel').onclick = () => dismissCrop(state);
+    state.find('crop-apply').onclick = () => applyCrop(state);
+    if (secret) {
+      state.find('pick').hidden = true;
+      state.find('next').disabled = true;
+      label(state, 'เปิดกล้องเพื่ออนุญาตให้คอมพิวเตอร์ที่จับคู่เห็นภาพและกรอบ');
+    }
     state.find('auto').onchange = () => { state.steadySince = 0; };
     state.find('pick').onclick = () => state.find('file').click();
     state.find('file').onchange = event => {
@@ -152,7 +215,7 @@
       input.value = '';
     };
     state.find('legacy').onclick = () => window.doScan();
-    refreshList(state, true);
+    if (!secret) refreshList(state, true);
   }
 
   async function refreshList(state, restore = false) {
@@ -210,8 +273,13 @@
     return element;
   }
 
-  function showImage(state, item, populate = false) {
-    stopCamera(state);
+  function showImage(state, item, populate = false, keepRemote = false) {
+    stopCamera(state, keepRemote);
+    dismissCrop(state);
+    if (state.current?.id !== item.id) {
+      state.cropSource = null;
+      state.cropPoints = null;
+    }
     state.current = item;
     if (state.imageUrl) URL.revokeObjectURL(state.imageUrl);
     state.imageUrl = URL.createObjectURL(item.blob);
@@ -221,6 +289,7 @@
     state.find('empty').hidden = true;
     state.find('start').querySelector('span').textContent = 'ถ่ายภาพใหม่';
     state.find('save').disabled = state.busy;
+    state.find('crop').hidden = !!state.secret;
     if (populate) {
       const fields = state.find('form').elements;
       fields.title.value = item.title || '';
@@ -236,6 +305,10 @@
     state.find('start').disabled = busy;
     state.find('pick').disabled = busy;
     state.find('save').disabled = busy || !state.current;
+    state.find('shutter').disabled = busy;
+    state.find('next').disabled = busy;
+    state.find('crop').disabled = busy;
+    state.find('crop-apply').disabled = busy;
   }
 
   async function removeRecord(state, item) {
@@ -324,25 +397,55 @@
     }
   }
 
+  function jpeg(canvas) {
+    return new Promise((resolve, reject) => canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error('image encoding failed')), 'image/jpeg', .93
+    ));
+  }
+
   async function storeImage(state, canvas) {
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.90));
-    if (!blob) throw new Error('image encoding failed');
+    return storeBlob(state, await jpeg(canvas), canvas.width, canvas.height);
+  }
+
+  async function storeBlob(state, blob, width, height, replacement = null) {
     if (active !== state) return;
     const time = Date.now();
-    const entry = { id: crypto.randomUUID(), owner: state.owner, blob,
-      width: canvas.width, height: canvas.height, createdAt: time, updatedAt: time };
+    const entry = { ...(replacement || { id: crypto.randomUUID(), owner: state.owner, createdAt: time }),
+      blob, width, height, updatedAt: time };
+    if (state.secret) {
+      state.hold = true;
+      state.find('shutter').hidden = true;
+      state.find('next').hidden = true;
+      label(state, 'กำลังส่งภาพที่ตัดขอบให้คอมพิวเตอร์');
+      const sent = await state.pair?.photo(blob, width, height);
+      if (sent) {
+        clearTimeout(state.confirmTimer);
+        state.confirmTimer = setTimeout(() => {
+          if (active === state && state.hold && state.find('next').hidden) {
+            state.find('next').hidden = false;
+            label(state, 'ยังไม่ได้รับการยืนยัน กรุณาตรวจภาพที่คอมพิวเตอร์ก่อนสแกนต่อ', 'error');
+          }
+        }, 12000);
+      }
+      if (active === state && !sent) {
+        state.find('next').hidden = true;
+        label(state, 'ส่งภาพไม่สำเร็จ กรุณาเชื่อมกล้องใหม่', 'error');
+      }
+      return;
+    }
     try {
-      await records('readwrite', store => store.add(entry));
+      await records('readwrite', store => replacement ? store.put(entry) : store.add(entry));
     } catch {
       if (active !== state) return;
-      showImage(state, entry, true);
+      showImage(state, entry, true, true);
       label(state, 'เก็บฉบับร่างไม่ได้ ภาพยังอยู่ในหน้านี้ กดบันทึกเพื่อลองอีกครั้ง', 'error');
       return;
     }
     if (active !== state) return;
-    showImage(state, entry, true);
-    label(state, 'เก็บภาพเป็นฉบับร่างแล้ว กรุณาตั้งชื่อเอกสาร', 'good');
+    showImage(state, entry, true, true);
+    label(state, replacement ? 'ปรับขอบและบันทึกภาพแล้ว' : 'เก็บภาพที่ตัดขอบเป็นฉบับร่างแล้ว กรุณาตั้งชื่อเอกสาร', 'good');
     await refreshList(state);
+    return true;
   }
 
   function canvasFrom(source, width, height) {
@@ -369,7 +472,15 @@
         image.onerror = reject;
         image.src = url;
       });
-      await storeImage(state, canvasFrom(image, image.naturalWidth, image.naturalHeight));
+      const raw = canvasFrom(image, image.naturalWidth, image.naturalHeight);
+      const frame = inspectFrame(raw, raw.width, raw.height);
+      if (!frame.points) {
+        editCrop(state, file, null, true);
+        return;
+      }
+      await storeImage(state, cropPaper(raw, frame));
+      state.cropSource = file;
+      state.cropPoints = normalizeCorners(frame);
     } catch {
       if (active === state) {
         if (state.current) showImage(state, state.current);
@@ -387,6 +498,8 @@
       label(state, 'กล้องต้องเปิดผ่าน HTTPS และเบราว์เซอร์ที่รองรับ หรือเลือกภาพจากเครื่อง', 'error');
       return;
     }
+    dismissCrop(state);
+    state.find('crop').hidden = true;
     const attempt = ++state.cameraAttempt;
     const start = state.find('start');
     start.disabled = true;
@@ -410,8 +523,39 @@
       await video.play();
       if (active !== state || attempt !== state.cameraAttempt) return;
       state.find('guide').hidden = false;
-      state.find('shutter').hidden = false;
+      state.find('shutter').hidden = !!state.secret;
       start.hidden = true;
+      if (state.secret) {
+        state.hold = false;
+        state.pairReady = false;
+        state.pair?.close();
+        state.pair = window.FreshyPair.join(state.secret, stream, {
+          ready: () => {
+            if (active !== state || !state.stream) return;
+            state.pairReady = true;
+            state.find('shutter').hidden = false;
+            label(state, 'เชื่อมกับคอมพิวเตอร์แล้ว จัดกระดาษให้ครบสี่มุม', 'good');
+          },
+          received: () => {
+            if (active !== state) return;
+            state.find('next').hidden = false;
+            label(state, 'คอมพิวเตอร์เก็บภาพเป็นฉบับร่างแล้ว', 'good');
+          },
+          capture: () => takePhoto(state, false),
+          status: (message, kind) => {
+            if (active !== state) return;
+            stopCamera(state);
+            state.pairReady = false;
+            label(state, message, kind);
+          },
+          disconnected: () => {
+            if (active !== state) return;
+            stopCamera(state);
+            state.pairReady = false;
+            label(state, 'คอมพิวเตอร์ปิดการเชื่อมต่อแล้ว');
+          }
+        });
+      }
       stream.getVideoTracks()[0].addEventListener('ended', () => {
         if (active === state && attempt === state.cameraAttempt) {
           stopCamera(state);
@@ -419,7 +563,7 @@
           label(state, 'กล้องหยุดทำงาน กรุณาเปิดกล้องอีกครั้ง', 'error');
         }
       });
-      label(state, 'จัดเอกสารให้เห็นครบทั้ง 4 มุม');
+      label(state, state.secret ? 'กำลังเชื่อมกับคอมพิวเตอร์' : 'จัดเอกสารให้เห็นครบทั้ง 4 มุม');
       state.timer = setInterval(() => checkFrame(state), 175);
     } catch (error) {
       if (active !== state || attempt !== state.cameraAttempt) return;
@@ -431,15 +575,126 @@
     }
   }
 
-  function inspectFrame(video) {
-    const scale = 256 / Math.max(video.videoWidth, video.videoHeight);
-    const width = Math.round(video.videoWidth * scale);
-    const height = Math.round(video.videoHeight * scale);
+  function hostCamera(state) {
+    if (state.busy) return;
+    stopCamera(state);
+    dismissCrop(state);
+    const panel = state.find('pair-panel');
+    const message = state.find('pair-message');
+    const qr = state.find('qr');
+    const copy = state.find('copy');
+    panel.hidden = false;
+    qr.hidden = true;
+    copy.hidden = true;
+    message.textContent = 'กำลังสร้างรหัสเชื่อมต่อ';
+    state.find('pair-close').textContent = 'ยกเลิก';
+    state.find('pair-toggle').hidden = true;
+    state.remote = true;
+    let stream;
+    const showRemote = async () => {
+      if (!stream || active !== state || !state.remote) return;
+      dismissCrop(state);
+      const video = state.find('video');
+      video.srcObject = stream;
+      state.find('preview').hidden = true;
+      state.find('empty').hidden = true;
+      video.hidden = false;
+      state.find('guide').hidden = true;
+      state.find('crop').hidden = true;
+      state.find('start').hidden = true;
+      state.find('shutter').hidden = false;
+      try { await video.play(); }
+      catch { if (active === state) label(state, 'เปิดภาพกล้องไม่ได้ กรุณาเชื่อมใหม่', 'error'); }
+    };
+    try {
+      state.pair = window.FreshyPair.host({
+        link: async link => {
+          if (active !== state || !state.remote) return;
+          message.textContent = 'สแกน QR ด้วยมือถือ แล้วกดเปิดกล้อง · ลิงก์มีอายุประมาณ 3 นาที';
+          copy.hidden = false;
+          copy.onclick = async () => {
+            try {
+              await navigator.clipboard.writeText(link);
+              message.textContent = 'คัดลอกลิงก์แล้ว เปิดลิงก์บนมือถือที่ต้องการใช้เป็นกล้อง';
+            } catch {
+              message.textContent = 'คัดลอกลิงก์ไม่ได้ กรุณาสแกน QR ด้วยกล้องมือถือ';
+            }
+          };
+          try {
+            await window.FreshyQR.toCanvas(qr, link, { width: 156, margin: 2, errorCorrectionLevel: 'M' });
+            if (active === state && state.remote) qr.hidden = false;
+          } catch {
+            if (active === state && state.remote) message.textContent = 'สร้างภาพ QR ไม่ได้ ใช้ปุ่มคัดลอกลิงก์ได้';
+          }
+        },
+        ready: () => {
+          if (active !== state || !state.remote) return;
+          qr.hidden = true;
+          copy.hidden = true;
+          state.find('pair-close').textContent = 'ตัดการเชื่อมต่อ';
+          message.textContent = 'เชื่อมกล้องมือถือแล้ว สามารถดูกรอบและกดถ่ายจากคอมพิวเตอร์';
+        },
+        video: live => { stream = live; showRemote(); },
+        frame: data => {
+          if (active !== state || !state.remote || state.find('video').hidden) return;
+          const { width, height, points, ready, message } = data;
+          if (!Number.isInteger(width) || width < 1 || width > 320 ||
+              !Number.isInteger(height) || height < 1 || height > 320) return;
+          if (points && (!Array.isArray(points) || points.length !== 4 || !points.every(point =>
+            point && Number.isFinite(point.x) && Number.isFinite(point.y) &&
+            point.x >= 0 && point.x <= width && point.y >= 0 && point.y <= height))) return;
+          const guide = state.find('guide');
+          drawGuide(guide, { width, height, points }, ready);
+          guide.hidden = false;
+          if (typeof message === 'string') label(state, message.slice(0, 120), ready ? 'good' : '');
+        },
+        resume: showRemote,
+        image: async (blob, width, height) => {
+          if (active !== state || !state.remote) return;
+          let processing = false;
+          try {
+            const bitmap = await createImageBitmap(blob);
+            const valid = bitmap.width === width && bitmap.height === height;
+            bitmap.close();
+            if (!valid || active !== state || !state.remote || state.busy) return;
+            processing = true;
+            setBusy(state, true);
+            const saved = await storeBlob(state, blob, width, height);
+            if (saved && active === state) state.pair?.send({ type: 'received' });
+            if (active === state) state.find('start').hidden = true;
+          } catch {
+            if (active === state) label(state, 'เปิดภาพที่ส่งมาจากมือถือไม่ได้', 'error');
+          } finally {
+            if (active === state && processing) setBusy(state, false);
+          }
+        },
+        status: (text, kind) => {
+          if (active !== state || !state.remote) return;
+          label(state, text, kind);
+          message.textContent = text;
+        },
+        disconnected: () => {
+          if (active !== state || !state.remote) return;
+          stopCamera(state);
+          if (state.current) showImage(state, state.current);
+          label(state, 'มือถือปิดการเชื่อมต่อแล้ว');
+        }
+      });
+    } catch {
+      stopCamera(state);
+      label(state, 'เบราว์เซอร์นี้เปิดการเชื่อมกล้องไม่ได้', 'error');
+    }
+  }
+
+  function inspectFrame(source, sourceWidth = source.videoWidth, sourceHeight = source.videoHeight) {
+    const scale = 320 / Math.max(sourceWidth, sourceHeight);
+    const width = Math.round(sourceWidth * scale);
+    const height = Math.round(sourceHeight * scale);
     if (sample.width !== width || sample.height !== height) {
       sample.width = width;
       sample.height = height;
     }
-    sampleContext.drawImage(video, 0, 0, width, height);
+    sampleContext.drawImage(source, 0, 0, width, height);
     const rgba = sampleContext.getImageData(0, 0, width, height).data;
     const gray = new Uint8Array(width * height);
     const histogram = new Uint32Array(256);
@@ -585,25 +840,35 @@
     ctx.clearRect(0, 0, width, height);
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = ready ? '#56e9a8' : '#b4d9f6';
-    ctx.setLineDash(points ? [] : [4, 3]);
-    if (!points) {
-      ctx.strokeRect(width * .09, height * .09, width * .82, height * .82);
-      return;
-    }
+    const bounds = points || [{x:width*.1,y:height*.08},{x:width*.9,y:height*.08},
+      {x:width*.9,y:height*.92},{x:width*.1,y:height*.92}];
     ctx.beginPath();
-    points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.rect(0, 0, width, height);
+    bounds.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x, p.y));
     ctx.closePath();
+    ctx.fillStyle = 'rgba(9,22,42,.3)';
+    ctx.fill('evenodd');
+    ctx.beginPath();
+    bounds.forEach((p, i) => ctx[i ? 'lineTo' : 'moveTo'](p.x, p.y));
+    ctx.closePath();
+    ctx.setLineDash(points ? [] : [4, 3]);
     ctx.stroke();
   }
 
   function checkFrame(state) {
     const video = state.find('video');
-    if (state.busy || video.readyState < 2 || document.hidden) return;
+    if (state.busy || state.hold || (state.secret && !state.pairReady) ||
+        video.readyState < 2 || document.hidden) return;
     const frame = inspectFrame(video);
     const previous = state.previous;
     state.previous = frame;
     const ready = frame.points && !frame.issue;
     drawGuide(state.find('guide'), frame, ready);
+    const message = !ready ? frame.issue || 'จัดเอกสารให้ครบ 4 มุม'
+      : state.find('auto').checked ? 'ภาพชัดแล้ว กรุณาถือโทรศัพท์ให้นิ่ง' : 'ภาพชัดแล้ว กดถ่ายตอนนี้ได้';
+    if (state.secret) state.pair?.send({
+      type: 'frame', width: frame.width, height: frame.height, points: frame.points, ready: !!ready, message
+    });
     if (!ready) {
       state.steadySince = 0;
       label(state, frame.issue || 'จัดเอกสารให้เห็นครบทั้ง 4 มุมและใช้พื้นหลังตัดกับกระดาษ');
@@ -628,35 +893,179 @@
     if (now - state.steadySince >= 700) takePhoto(state, true);
   }
 
+  function normalizeCorners(frame) {
+    return frame?.points?.map(point => ({ x: point.x / frame.width, y: point.y / frame.height }));
+  }
+
   function cropPaper(source, frame) {
-    if (!frame?.points) return source;
-    const xs = frame.points.map(point => point.x);
-    const ys = frame.points.map(point => point.y);
-    const left = Math.max(0, Math.floor((Math.min(...xs) - 2) * source.width / frame.width));
-    const top = Math.max(0, Math.floor((Math.min(...ys) - 2) * source.height / frame.height));
-    const right = Math.min(source.width, Math.ceil((Math.max(...xs) + 3) * source.width / frame.width));
-    const bottom = Math.min(source.height, Math.ceil((Math.max(...ys) + 3) * source.height / frame.height));
-    const cropped = document.createElement('canvas');
-    cropped.width = right - left;
-    cropped.height = bottom - top;
-    cropped.getContext('2d').drawImage(source, -left, -top);
-    return cropped;
+    const corners = normalizeCorners(frame);
+    const center = corners.reduce((sum, p) => ({ x: sum.x + p.x / 4, y: sum.y + p.y / 4 }), { x: 0, y: 0 });
+    return warpPaper(source, corners.map(p => ({
+      x: p.x + (center.x - p.x) * .025, y: p.y + (center.y - p.y) * .025
+    })));
+  }
+
+  function warpPaper(source, corners) {
+    const points = corners.map(p => ({ x: p.x * (source.width - 1), y: p.y * (source.height - 1) }));
+    if (points.some((a, i) => {
+      const b = points[(i + 1) % 4], c = points[(i + 2) % 4];
+      return distance(a, b) < 20 || (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x) <= 0;
+    })) throw new Error('Invalid corners');
+    const [a, b, c, d] = points;
+    const outputWidth = Math.round(Math.max(distance(a, b), distance(d, c)));
+    const outputHeight = Math.round(Math.max(distance(a, d), distance(b, c)));
+    const scale = Math.min(1, 2200 / Math.max(outputWidth, outputHeight));
+    const output = document.createElement('canvas');
+    const width = output.width = Math.round(outputWidth * scale);
+    const height = output.height = Math.round(outputHeight * scale);
+    const input = source.getContext('2d').getImageData(0, 0, source.width, source.height).data;
+    const context = output.getContext('2d');
+    const result = context.createImageData(width, height);
+    const dx1 = b.x - c.x, dx2 = d.x - c.x, dx3 = a.x - b.x + c.x - d.x;
+    const dy1 = b.y - c.y, dy2 = d.y - c.y, dy3 = a.y - b.y + c.y - d.y;
+    const determinant = dx1 * dy2 - dx2 * dy1;
+    if (Math.abs(determinant) < .001) throw new Error('Invalid perspective');
+    const g = (dx3 * dy2 - dx2 * dy3) / determinant;
+    const h = (dx1 * dy3 - dx3 * dy1) / determinant;
+    for (let y = 0; y < height; y++) {
+      const v = (y + .5) / height;
+      for (let x = 0; x < width; x++) {
+        const u = (x + .5) / width;
+        const divisor = 1 + g * u + h * v;
+        const sx = Math.max(0, Math.min(source.width - 1.001,
+          (a.x + (b.x * (1 + g) - a.x) * u + (d.x * (1 + h) - a.x) * v) / divisor));
+        const sy = Math.max(0, Math.min(source.height - 1.001,
+          (a.y + (b.y * (1 + g) - a.y) * u + (d.y * (1 + h) - a.y) * v) / divisor));
+        const dx = sx % 1, dy = sy % 1;
+        const from = (Math.floor(sy) * source.width + Math.floor(sx)) * 4;
+        const next = from + source.width * 4;
+        const to = (y * width + x) * 4;
+        for (let i = 0; i < 3; i++) {
+          result.data[to + i] = (input[from + i] * (1 - dx) + input[from + 4 + i] * dx) * (1 - dy) +
+            (input[next + i] * (1 - dx) + input[next + 4 + i] * dx) * dy;
+        }
+        result.data[to + 3] = 255;
+      }
+    }
+    context.putImageData(result, 0, 0);
+    return output;
+  }
+
+  function dismissCrop(state) {
+    state.editor = null;
+    state.find('crop-editor').hidden = true;
+  }
+
+  async function editCrop(state, blob, points = state.cropPoints, fresh = false) {
+    if (!blob) return;
+    stopCamera(state, true);
+    const url = URL.createObjectURL(blob);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      if (active !== state) return;
+      const raw = canvasFrom(image, image.naturalWidth, image.naturalHeight);
+      const canvas = state.find('crop-canvas');
+      const surface = state.find('crop-surface');
+      const aspect = raw.width / raw.height;
+      surface.style.width = 'min(100%, ' + Math.round(435 * aspect) + 'px)';
+      surface.style.aspectRatio = raw.width + ' / ' + raw.height;
+      canvas.width = raw.width;
+      canvas.height = raw.height;
+      const corners = points?.map(p => ({ ...p })) ||
+        [{x:.035,y:.035},{x:.965,y:.035},{x:.965,y:.965},{x:.035,y:.965}];
+      state.editor = { raw, corners, blob, replacement: fresh ? null : state.current };
+      const handles = Array.from(surface.querySelectorAll('[data-corner]'));
+      const redraw = () => {
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(raw, 0, 0);
+        ctx.beginPath();
+        ctx.rect(0, 0, raw.width, raw.height);
+        corners.forEach(({ x, y }, i) => {
+          ctx[i ? 'lineTo' : 'moveTo'](x * raw.width, y * raw.height);
+          handles[i].style.left = x * 100 + '%';
+          handles[i].style.top = y * 100 + '%';
+        });
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(6,22,45,.58)';
+        ctx.fill('evenodd');
+      };
+      handles.forEach((handle, index) => {
+        const move = (x, y) => {
+          corners[index] = { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+          redraw();
+        };
+        handle.onpointerdown = event => handle.setPointerCapture(event.pointerId);
+        handle.onpointermove = event => {
+          if (!handle.hasPointerCapture(event.pointerId)) return;
+          const bounds = surface.getBoundingClientRect();
+          move((event.clientX - bounds.left) / bounds.width, (event.clientY - bounds.top) / bounds.height);
+        };
+        handle.onkeydown = event => {
+          const movement = { ArrowLeft: [-1,0], ArrowRight: [1,0], ArrowUp: [0,-1], ArrowDown: [0,1] }[event.key];
+          if (!movement) return;
+          event.preventDefault();
+          const speed = event.shiftKey ? .02 : .005;
+          move(corners[index].x + movement[0] * speed, corners[index].y + movement[1] * speed);
+        };
+      });
+      state.find('crop-editor').hidden = false;
+      redraw();
+      label(state, 'ตรวจตำแหน่งมุมกระดาษก่อนตัดขอบ');
+    } catch {
+      if (active === state) label(state, 'เปิดภาพสำหรับปรับมุมไม่ได้', 'error');
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async function applyCrop(state) {
+    if (!state.editor || state.busy) return;
+    const { raw, corners, blob, replacement } = state.editor;
+    setBusy(state, true);
+    try {
+      const output = warpPaper(raw, corners);
+      await storeBlob(state, await jpeg(output), output.width, output.height, replacement);
+      state.cropSource = blob;
+      state.cropPoints = corners;
+    } catch {
+      if (active === state) label(state, 'ปรับจุดทั้งสี่ให้เรียงตามมุมกระดาษแล้วลองอีกครั้ง', 'error');
+    } finally {
+      if (active === state) setBusy(state, false);
+    }
   }
 
   async function takePhoto(state, automatic) {
     const video = state.find('video');
-    if (state.busy || !state.stream || video.readyState < 2) return;
+    if (state.busy || state.hold || !state.stream || video.readyState < 2) return;
+    if (state.secret && !state.pairReady) return;
     setBusy(state, true);
     try {
       const raw = canvasFrom(video, video.videoWidth, video.videoHeight);
-      const frame = state.previous;
-      stopCamera(state);
-      label(state, 'กำลังเก็บภาพเป็นฉบับร่าง');
-      await storeImage(state, automatic ? cropPaper(raw, frame) : raw);
+      const frame = inspectFrame(raw, raw.width, raw.height);
+      if (automatic && (!frame.points || frame.issue)) {
+        state.steadySince = 0;
+        return;
+      }
+      if (!state.secret) stopCamera(state, true);
+      label(state, 'กำลังตัดขอบกระดาษ');
+      if (!frame.points) {
+        if (state.secret) {
+          label(state, 'ยังเห็นขอบไม่ครบ กรุณาขยับโทรศัพท์ให้เห็นกระดาษทั้งแผ่น', 'error');
+          return;
+        }
+        await editCrop(state, await jpeg(raw), null, true);
+        return;
+      }
+      await storeImage(state, cropPaper(raw, frame));
+      if (!state.secret) {
+        state.cropSource = await jpeg(raw);
+        state.cropPoints = normalizeCorners(frame);
+      }
     } catch {
-      stopCamera(state);
-      if (state.current) showImage(state, state.current);
-      label(state, 'บันทึกภาพไม่ได้ กรุณาเปิดกล้องแล้วลองถ่ายอีกครั้ง', 'error');
+      if (!state.secret) stopCamera(state, true);
+      if (active === state) label(state, 'บันทึกภาพไม่ได้ กรุณาลองถ่ายอีกครั้ง', 'error');
     } finally {
       if (active === state) setBusy(state, false);
     }
@@ -670,4 +1079,13 @@
   });
   window.addEventListener('pagehide', close);
   window.FreshyScanner = { mount, close };
+  const cameraLink = location.hash.match(/^#scan-camera=([A-Za-z0-9_-]{43})$/);
+  if (cameraLink) {
+    history.replaceState(null, '', location.pathname + location.search);
+    const wrapper = document.createElement('main');
+    wrapper.id = 'scan-phone-root';
+    document.body.append(wrapper);
+    document.body.classList.add('scan-phone-mode');
+    mount(wrapper, null, cameraLink[1]);
+  }
 })();

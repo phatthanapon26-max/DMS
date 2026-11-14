@@ -1,8 +1,14 @@
 {
   "version": 2,
-  "builds": [{ "src": "index.html", "use": "@vercel/static" }, { "src": "scanner.*", "use": "@vercel/static" }],
+  "regions": ["sin1"],
+  "builds": [
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "scanner*.{js,css}", "use": "@vercel/static" },
+    { "src": "api/scan-pair.js", "use": "@vercel/node" }
+  ],
   "routes": [
-    { "src": "/scanner\\.(js|css)", "dest": "/scanner.$1" },
+    { "src": "/api/scan-pair", "dest": "/api/scan-pair.js" },
+    { "src": "/(scanner(?:-pair|-qr)?\\.(?:js|css))", "dest": "/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
