@@ -230,6 +230,8 @@ tr:hover td{background:#eef4fb}
   body{background:#fff}
 }
 </style>
+<link rel="stylesheet" href="/scanner.css">
+<script defer src="/scanner.js"></script>
 </head>
 <body>
 
@@ -577,7 +579,7 @@ async function doLogin(){
 }
 function doLogout(){
   Swal.fire({title:'ยืนยันออกจากระบบ?',icon:'question',showCancelButton:true,confirmButtonText:'ออกจากระบบ',cancelButtonText:'ยกเลิก',confirmButtonColor:'#1a3f6f'}).then(r=>{
-    if(r.isConfirmed){SESSION=null;$('appView').classList.remove('show');$('pubView').style.display='block';showPub('home');renderPubDocs()}
+    if(r.isConfirmed){window.FreshyScanner?.close();SESSION=null;$('appView').classList.remove('show');$('pubView').style.display='block';showPub('home');renderPubDocs()}
   });
 }
 
@@ -603,6 +605,7 @@ function buildMenu(){
 }
 function toggleSidebar(){$('sidebar').classList.toggle('open');$('overlay').classList.toggle('show')}
 async function go(view){
+  window.FreshyScanner?.close();
   currentView=view;
   document.querySelectorAll('.side-item').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
   if(window.innerWidth<=900){$('sidebar').classList.remove('open');$('overlay').classList.remove('show')}
@@ -778,37 +781,12 @@ function downloadFile(fid){API.get('/docs').then(docs=>{for(const d of docs){con
 
 /* ==================== SCAN ==================== */
 function renderScan(){
-  $('content').innerHTML=`<div class="stats-grid" style="grid-template-columns:1fr 1fr">
-    <div class="panel" style="text-align:center">
-      <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:12px;background:#eef4fb;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--navy)">▣</div>
-      <h3 style="display:inline-block">สแกนด้วยเครื่องปริ้นเตอร์ (PC)</h3>
-      <p class="text-muted" style="margin:8px 0 14px">เชื่อมต่อเครื่องสแกน/ปริ้นเตอร์จริง (TWAIN/WIA) เลือกถาดได้<br>ระบบอ่านหัวข้ออัตโนมัติ (OCR) จัดประเภทให้เอง</p>
-      <div class="flex" style="justify-content:center">
-        <select style="padding:9px;border:1.5px solid var(--border);border-radius:7px"><option>ถาดอัตโนมัติ (ADF)</option><option>ถาดแผ่นเดียว (Flatbed)</option><option>ถาด 50 แผ่น</option></select>
-        <button class="btn btn-primary" onclick="doScan()">▶ สแกนเอกสาร</button>
-      </div>
-      <div class="text-muted mt">ไดร์ฟบันทึก: D:\\Archive\\Docs (กำหนดได้ใน config.json)</div>
-      <div id="scanResult" class="mt" style="text-align:left"></div>
-    </div>
-    <div class="panel" style="text-align:center">
-      <div style="width:64px;height:64px;margin:0 auto 12px;border-radius:12px;background:#fbf5e2;display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--gold)">▣</div>
-      <h3 style="display:inline-block">สแกนด้วยกล้องมือถือ</h3>
-      <p class="text-muted" style="margin:8px 0 14px">ถ่ายภาพเอกสารด้วยกล้อง → แปลงเป็น PDF ทันที<br>จัดประเภทอัตโนมัติเหมือนสแกนจากเครื่องปริ้นเตอร์</p>
-      <input type="file" id="camFile" accept="image/*" capture="environment" style="display:none" onchange="mobileScan(this.files[0])">
-      <button class="btn btn-gold" onclick="document.getElementById('camFile').click()">▣ เปิดกล้องถ่ายเอกสาร</button>
-      <div id="mobileResult" class="mt" style="text-align:left"></div>
-    </div></div>
-    <div class="panel"><h3 style="display:inline-block">หลักการ Auto-Classification</h3>
-      <div class="text-muted" style="line-height:1.9">
-        • หน้าแรก = หัวข้อ → ระบบอ่านแล้วตีประเภททันที (ใบส่งน้ำ / ใบกำกับภาษี / บิลเงินสด / ใบเสนอราคา)<br>
-        • หน้าที่ 2 เป็นต้นไป (ไม่มีหัวข้อ/เลขที่) → ผูกติดกับแฟ้มเดียวกันอัตโนมัติ<br>
-        • ถ้าไม่ใช่กระดาษ A4 หรือเป็นบิล (โรงพยาบาล/โรงเรียน/การไฟฟ้า) → อ่านหัวข้อทุกแผ่น แล้วตีประเภทตามจริง<br>
-        • แต่ละแฟ้มตั้งชื่อ: <b>ประเภท + เลขเอกสาร + วันที่</b> (ชื่อเรื่องซ้ำได้ แต่เลขที่+วันที่ไม่ซ้ำ)
-      </div></div>`;
+  window.FreshyScanner.mount($('content'), SESSION);
 }
 const SCAN_SAMPLES=[{title:'ใบส่งน้ำ หมู่บ้านสุขสวัสดิ์',cat:'ใบส่งน้ำ',prefix:'WS'},{title:'ใบกำกับภาษี บริษัท กาแฟดี จำกัด',cat:'ใบกำกับภาษี',prefix:'INV'},{title:'บิลเงินสด ร้านสะดวกซื้อ',cat:'บิลเงินสด',prefix:'BILL'},{title:'ใบเสนอราคา จัดซื้อถังน้ำ 20 ลิตร',cat:'ใบเสนอราคา',prefix:'Q'}];
 async function doScan(){
   showSpin(true);await new Promise(r=>setTimeout(r,1600));showSpin(false);
+  if (!$('scanResult') || !SESSION) return;
   const s=SCAN_SAMPLES[Math.floor(Math.random()*SCAN_SAMPLES.length)];
   const seq=String(Math.floor(Math.random()*900)+100);const docNo=s.prefix+'-00'+seq;
   const today=new Date().toISOString().slice(0,10);
@@ -828,39 +806,6 @@ async function confirmScan(s,docNo,today,targetId){
   showSpin(false);$(targetId).innerHTML='';
   Swal.fire({icon:'success',title:'บันทึกลงคลังเอกสารแล้ว',text:docNo+' · '+s.title,timer:1400,showConfirmButton:false});
 }
-async function mobileScan(file){
-  if(!file)return;showSpin(true);
-  const r=new FileReader();
-  r.onload=async e=>{
-    const {jsPDF}=window.jspdf;const pdf=new jsPDF({unit:'pt',format:'a4'});
-    const img=new Image();
-    img.onload=async()=>{
-      const pw=pdf.internal.pageSize.getWidth(),ph=pdf.internal.pageSize.getHeight();
-      const ratio=Math.min(pw/img.width,ph/img.height);
-      pdf.addImage(e.target.result,'JPEG',0,0,img.width*ratio,img.height*ratio);
-      const pdfData=pdf.output('datauristring');
-      showSpin(false);
-      const s=SCAN_SAMPLES[Math.floor(Math.random()*SCAN_SAMPLES.length)];
-      const seq=String(Math.floor(Math.random()*900)+100);const docNo=s.prefix+'-00'+seq;
-      const today=new Date().toISOString().slice(0,10);
-      window._lastPdf={name:'scan_'+docNo+'.pdf',data:pdfData,size:pdfData.length,type:'application/pdf'};
-      $('mobileResult').innerHTML=`<div class="panel" style="background:#f2f8f2;border:1px solid #bfe0cf;margin:0">
-        <b style="color:var(--success)">✓ แปลงเป็น PDF สำเร็จ + จัดประเภทอัตโนมัติ</b>
-        <div class="info-row"><span>หัวข้อ</span><b>${esc(s.title)}</b></div>
-        <div class="info-row"><span>ประเภท</span>${catBadge(s.cat)}</div>
-        <div class="info-row"><span>ไฟล์</span><b>scan_${docNo}.pdf</b></div>
-        <div class="mt"><button class="btn btn-success btn-sm" style="background:var(--success);color:#fff" onclick='confirmScanMobile(${JSON.stringify(s).replace(/'/g,"&#39;")},"${docNo}","${today}")'>✓ บันทึกลงคลัง</button></div></div>`;
-    };img.src=e.target.result;
-  };r.readAsDataURL(file);
-}
-async function confirmScanMobile(s,docNo,today){
-  showSpin(true);
-  const f=window._lastPdf;
-  await API.post('/docs',{docNo,subject:s.title,signDate:today,fiscalYear:'2569',category:s.cat,department:SESSION.department,ownerId:SESSION.id,files:[{id:'f'+Date.now(),name:f.name,size:f.size,type:f.type,data:f.data}],confidential:false,password:'',history:[{action:'สร้างจากสแกนมือถือ (Camera→PDF)',by:SESSION.fullname,at:Date.now()}]});
-  showSpin(false);$('mobileResult').innerHTML='';
-  Swal.fire({icon:'success',title:'บันทึกลงคลังแล้ว',timer:1300,showConfirmButton:false});
-}
-
 /* ==================== HR MODULE ==================== */
 async function renderHR(){
   const emps=await API.get('/employees');const ws=await API.get('/waterstats');
