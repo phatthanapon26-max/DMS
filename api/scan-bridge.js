@@ -43,6 +43,8 @@ export const createHandler = (env=process.env,call=fetch) => async (req,res) => 
   if(!body)return res.status(400).json({error:'invalid_registry_snapshot'});
   const options=()=>({cache:'no-store',redirect:'error',signal:AbortSignal.timeout(5000)});
   const headers={Authorization:'Bearer '+ingest,Accept:'application/json'};
+  // Sites consumes this header at its private gateway. Vault separately checks the source key.
+  if (env.SCAN_BRIDGE_VAULT_SITE_ACCESS) headers['OAI-Sites-Authorization']='Bearer '+env.SCAN_BRIDGE_VAULT_SITE_ACCESS;
   try {
     // Permission check carries no record data. A denied or unavailable check sends no snapshot.
     const check=await call(target+'ingest-status',{...options(),headers});

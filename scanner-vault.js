@@ -31,12 +31,13 @@
     return key;
   }
   async function encrypt(key, item) {
-    const {id,owner,blob,...metadata} = item;
-    const [meta,image] = await Promise.all([
+    const {id,owner,blob,pdfBlob,...metadata} = item;
+    const [meta,image,pdf] = await Promise.all([
       seal(key,encoder.encode(JSON.stringify(metadata)),aad(owner,id,'meta')),
-      blob.arrayBuffer().then(bytes => seal(key,bytes,aad(owner,id,'image')))
+      blob.arrayBuffer().then(bytes => seal(key,bytes,aad(owner,id,'image'))),
+      pdfBlob?.arrayBuffer().then(bytes => seal(key,bytes,aad(owner,id,'pdf')))
     ]);
-    return {id,owner,meta,image,v:1};
+    return {id,owner,meta,image,...(pdf ? {pdf} : {}),v:1};
   }
   async function metadata(key, sealed) {
     if (sealed.v !== 1) throw Error('Unencrypted record');
@@ -46,5 +47,9 @@
   async function image(key, sealed) {
     return new Blob([await open(key,sealed.image,aad(sealed.owner,sealed.id,'image'))],{type:'image/jpeg'});
   }
-  globalThis.FreshyVault = Object.freeze({create,unlock,encrypt,metadata,image});
+  async function pdf(key, sealed) {
+    if (sealed.v !== 1 || !sealed.pdf) return null;
+    return new Blob([await open(key,sealed.pdf,aad(sealed.owner,sealed.id,'pdf'))],{type:'application/pdf'});
+  }
+  globalThis.FreshyVault = Object.freeze({create,unlock,encrypt,metadata,image,pdf});
 })();

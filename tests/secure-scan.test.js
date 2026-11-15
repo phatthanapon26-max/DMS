@@ -22,6 +22,19 @@ test('vault leaves no plaintext document or metadata and authenticates owner, re
  await assert.rejects(FreshyVault.image(reopened,{...sealed,image:{...sealed.image,ciphertext:copy}}));
 });
 
+test('PDF bytes are separately encrypted and older scans still open',async()=>{
+ const {key}=await FreshyVault.create('alice','a random series of words');
+ const item={owner:'alice',id:'file-pdf',title:'test',blob:new Blob(['original jpeg'])};
+ const original=await FreshyVault.encrypt(key,item);
+ assert.equal(await FreshyVault.pdf(key,original),null);
+ const encrypted=await FreshyVault.encrypt(key,{...item,pdfBlob:new Blob(['%PDF secret content'])});
+ assert(!Buffer.from(encrypted.pdf.ciphertext).includes('%PDF secret content'));
+ assert.equal(await (await FreshyVault.pdf(key,encrypted)).text(),'%PDF secret content');
+ assert(!(await FreshyVault.metadata(key,encrypted)).pdfBlob);
+ await assert.rejects(FreshyVault.pdf(key,{...encrypted,owner:'another user'}));
+ await assert.rejects(FreshyVault.pdf(key,{...encrypted,pdf:encrypted.image}));
+});
+
 test('QR secret and separate pairing code are jointly required to find and decrypt the offer',async()=>{
  const source=await readFile(new URL('../scanner-pair.js',import.meta.url),'utf8');
  const keyOnly=source.replace('window.FreshyPair = { host, join, validCode };','window.derive = keys; window.validCode = validCode;');
@@ -51,9 +64,10 @@ async function request(handler,method,key,body,extras={}) {
 }
 test('bridge sends no snapshot when Vault is disabled, revoked, or unavailable; only allows registry metadata',async()=>{
  let permission=423, duringSubmit=202, checks=0, sent=0;
- const handler=createHandler(env,async(url,opt)=>{
+ const handler=createHandler({...env,SCAN_BRIDGE_VAULT_SITE_ACCESS:'synthetic-gateway-credential'},async(url,opt)=>{
   assert.match(url,/^https:\/\/vault\.freshywater\.in\.th\/v1\/sources\/docs_scan\//);
   assert.equal(opt.headers.Authorization,'Bearer '+ingest);
+  assert.equal(opt.headers['OAI-Sites-Authorization'],'Bearer synthetic-gateway-credential');
   assert.equal(opt.redirect,'error');assert.equal(opt.cache,'no-store');
   if(url.endsWith('ingest-status')){
    checks++;assert.equal(opt.body,undefined);

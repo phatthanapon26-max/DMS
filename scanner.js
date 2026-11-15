@@ -421,7 +421,7 @@
         buttons.append(
           button(item.title ? 'เปิด / แก้ไข' : 'เปิดฉบับร่าง', withImage(opened => showImage(state, opened, true))),
           button('ภาพ JPG', withImage(opened => { if (allowExport()) download(opened.blob, filename(opened) + '.jpg'); })),
-          button('PDF', withImage(opened => { if (allowExport()) return downloadPdf(state, opened); })),
+          button('PDF', withImage(opened => { if (allowExport()) return downloadPdf(state, opened, item.sealed); })),
           button('ลบ', () => removeRecord(state, item))
         );
         row.append(info, buttons);
@@ -523,10 +523,12 @@
     };
     setBusy(state, true);
     try {
-      await storePrivate(state, entry);
+      let pdfBlob;
+      try { pdfBlob = await makePdf(entry); } catch { /* Keep the scanned image if PDF generation is unavailable. */ }
+      await storePrivate(state, {...entry,pdfBlob});
       if (active !== state) return;
       state.current = entry;
-      label(state, 'บันทึกเข้าทะเบียนสแกนบนเครื่องนี้แล้ว', 'good');
+      label(state, pdfBlob ? 'เก็บภาพ JPG และ PDF แบบเข้ารหัสแล้ว' : 'เก็บภาพแบบเข้ารหัสแล้ว · ยังสร้าง PDF ไม่สำเร็จ', pdfBlob ? 'good' : 'error');
       await refreshList(state);
     } catch {
       if (active === state) label(state, 'บันทึกทะเบียนไม่ได้ ภาพยังอยู่ในหน้าจอนี้', 'error');
@@ -550,18 +552,24 @@
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
-  async function downloadPdf(state, item) {
+  async function makePdf(item) {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: item.width > item.height ? 'landscape' : 'portrait' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const scale = Math.min((pageWidth - 36) / item.width, (pageHeight - 36) / item.height);
+    const width = item.width * scale;
+    const height = item.height * scale;
+    pdf.addImage(new Uint8Array(await item.blob.arrayBuffer()), 'JPEG',
+      (pageWidth - width) / 2, (pageHeight - height) / 2, width, height);
+    return pdf.output('blob');
+  }
+
+  async function downloadPdf(state, item, sealed) {
     try {
-      const { jsPDF } = window.jspdf;
-      const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: item.width > item.height ? 'landscape' : 'portrait' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const scale = Math.min((pageWidth - 36) / item.width, (pageHeight - 36) / item.height);
-      const width = item.width * scale;
-      const height = item.height * scale;
-      pdf.addImage(new Uint8Array(await item.blob.arrayBuffer()), 'JPEG',
-        (pageWidth - width) / 2, (pageHeight - height) / 2, width, height);
-      if (active === state && state.vaultKey) pdf.save(filename(item) + '.pdf');
+      const stored = await window.FreshyVault.pdf(state.vaultKey,sealed);
+      const pdfBlob = stored ?? await makePdf(item);
+      if (active === state && state.vaultKey) download(pdfBlob,filename(item)+'.pdf');
     } catch {
       if (active === state) label(state, 'สร้าง PDF ไม่สำเร็จ กรุณาลองใหม่หรือดาวน์โหลดภาพ JPG', 'error');
     }
