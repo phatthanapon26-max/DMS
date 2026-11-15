@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   if (typeof room !== 'string' || !validKey.test(room) || !['offer', 'answer'].includes(slot)) {
     return res.status(400).end();
   }
-  const cache = getCache({ namespace: 'freshy-dms-camera-v1' });
+  const cache = getCache({ namespace: 'freshy-dms-camera-v2' });
   const key = room + ':' + slot;
   try {
     if (req.method === 'GET') {

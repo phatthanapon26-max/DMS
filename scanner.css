@@ -134,3 +134,10 @@ body:has(.scan-page) .content{background:linear-gradient(180deg,#d5ecff 0,#ecf6f
   .scan-expanded{inset:6px!important}
 }
 @media(prefers-reduced-motion:reduce){.scan-page *, .scan-page *::before{scroll-behavior:auto;transition:none}}
+
+.scan-vault { margin: 0 0 1rem; }
+.scan-vault form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+.scan-vault form label { flex: 1 1 13rem; margin: 0; }
+.scan-page [hidden] { display: none !important; }
+.scan-pair-code { display: inline-block; border: 1px solid #b4d5ef; background: #fff; color: #163b62; border-radius: .5rem; padding: .45rem .7rem; margin-bottom: .5rem; font: 700 1.05rem/1.4 ui-monospace, monospace; letter-spacing: .08em; }
+.scan-phone [data-scan="join-code"] { letter-spacing: .12em; }

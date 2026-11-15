@@ -14,9 +14,11 @@
 
   function openDatabase() {
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open('freshy-document-scanner', 1);
+      const request = indexedDB.open('freshy-document-scanner', 2);
       request.onupgradeneeded = () => {
-        request.result.createObjectStore('scans', { keyPath: 'id' }).createIndex('owner', 'owner');
+        const db = request.result;
+        if (!db.objectStoreNames.contains('scans')) db.createObjectStore('scans', {keyPath:'id'}).createIndex('owner','owner');
+        if (!db.objectStoreNames.contains('vaults')) db.createObjectStore('vaults', {keyPath:'owner'});
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error);
@@ -24,13 +26,13 @@
     });
   }
 
-  async function records(mode, work) {
+  async function records(mode, work, collection = 'scans') {
     const database = await openDatabase();
     try {
       return await new Promise((resolve, reject) => {
-        const transaction = database.transaction('scans', mode);
-        const request = work(transaction.objectStore('scans'));
-        transaction.oncomplete = () => resolve(request.result);
+        const transaction = database.transaction(collection, mode);
+        const request = work(transaction.objectStore(collection));
+        transaction.oncomplete = () => resolve(request?.result);
         transaction.onabort = () => reject(transaction.error);
       });
     } finally {
@@ -62,6 +64,8 @@
     state.find('view-source').textContent = 'พร้อมสแกน';
     if (!keepRemote) setMonitor(state, false);
     if (!keepRemote && state.remote) {
+      state.find('pair-code').textContent = '';
+      state.find('pair-code').hidden = true;
       state.pair?.close();
       state.pair = null;
       state.remote = false;
@@ -80,6 +84,7 @@
       state.find('preview').hidden = true;
       state.find('next').hidden = true;
       state.hold = false;
+      state.find('join-code').closest('label').hidden = false;
     }
     state.find('empty').hidden = !!state.current;
   }
@@ -89,6 +94,7 @@
     active.pair?.close();
     stopCamera(active);
     if (active.imageUrl) URL.revokeObjectURL(active.imageUrl);
+    active.vaultKey = null;
     active = null;
   }
 
@@ -116,9 +122,19 @@
         <section class="scan-cast-bar" ${secret ? 'hidden' : ''}>
           <div class="scan-cast-icon">${castIcon}</div>
           <div><h2>แคสหน้าสแกนขึ้นคอม</h2><p>ดูภาพสด กรอบสี่มุม และรูปหลังตัดขอบ</p></div>
-          <button type="button" class="scan-button primary scan-connect" data-scan="pair-toggle" ${secret ? 'hidden' : ''}>เชื่อมด้วย QR</button>
+          <button type="button" class="scan-button primary scan-connect" data-scan="pair-toggle" disabled ${secret ? 'hidden' : ''}>เชื่อมด้วย QR</button>
         </section>
-        <div class="scan-grid">
+        ${secret ? '' : `<section class="scan-card scan-vault" aria-labelledby="scan-vault-heading">
+          <div class="scan-head"><div><h2 id="scan-vault-heading">คลังสแกนส่วนตัว</h2>
+          <p class="scan-description" data-scan="vault-status" role="status">กำลังตรวจคลังในเครื่องนี้</p></div>
+          <button class="scan-button" type="button" data-scan="vault-lock" hidden>ล็อกคลังและปิดกล้อง</button></div>
+          <form data-scan="vault-form" hidden><label class="scan-field">รหัสผ่านคลัง
+          <input name="passphrase" type="password" autocomplete="off" minlength="12" maxlength="256" required></label>
+          <label class="scan-field" data-scan="vault-confirm" hidden>ยืนยันรหัสผ่านคลัง
+          <input name="confirmation" type="password" autocomplete="off" minlength="12" maxlength="256"></label>
+          <button class="scan-button primary" data-scan="vault-submit" type="submit">ปลดล็อกคลัง</button></form>
+        </section>`}
+        <div class="scan-grid" data-scan="vault-workspace" ${secret ? '' : 'hidden'}>
           <section class="scan-card" aria-labelledby="scan-camera-heading" data-scan="camera-card">
             <div class="scan-head"><div><h2 id="scan-camera-heading" tabindex="-1">ช่องมองภาพ</h2>
               <p class="scan-source" data-scan="view-source">พร้อมสแกน</p></div>
@@ -130,12 +146,16 @@
               <canvas width="156" height="156" data-scan="qr" hidden aria-label="QR เชื่อมกล้องมือถือ"></canvas>
               <div><strong>เชื่อมกล้องมือถือกับคอมพิวเตอร์</strong>
                 <p data-scan="pair-message" role="status">กำลังสร้าง QR</p>
+                <output class="scan-pair-code" data-scan="pair-code" hidden aria-label="รหัสจับคู่"></output>
                 <div class="scan-actions">
                   <button type="button" class="scan-button" data-scan="copy" hidden>คัดลอกลิงก์</button>
                   <button type="button" class="scan-button" data-scan="pair-close">ยกเลิก</button>
                 </div>
               </div>
             </div>
+            ${secret ? `<label class="scan-field">รหัสจับคู่จากหน้าคอม
+              <input data-scan="join-code" type="password" autocapitalize="characters"
+                autocomplete="off" spellcheck="false" maxlength="20" placeholder="XXXX-XXXX-XXXX"></label>` : ''}
             <div class="scan-stage">
               <div class="scan-empty" data-scan="empty"><span class="scan-glyph">${cameraIcon}</span>
                 <strong>จัดเอกสารให้ครบ 4 มุม</strong><p>วางบนพื้นเรียบ สีตัดกับกระดาษ แล้วถือโทรศัพท์ให้นิ่ง</p></div>
@@ -181,22 +201,22 @@
               </div>
               <button class="scan-button primary scan-submit" data-scan="save" type="submit" disabled>บันทึกเข้าทะเบียนสแกน</button>
             </form>
-            <p class="scan-note">ทะเบียนเก็บในเบราว์เซอร์เครื่องที่บันทึก สามารถดาวน์โหลด JPG หรือ PDF จากรายการด้านล่าง</p>
+            <p class="scan-note">ไฟล์และข้อมูลทะเบียนเข้ารหัสในเบราว์เซอร์เครื่องนี้ ไฟล์ JPG หรือ PDF ที่ดาวน์โหลดออกไปเป็นไฟล์ปกติ</p>
           </section>
         </div>
-        <section class="scan-card scan-register" aria-labelledby="scan-register-heading">
+        <section class="scan-card scan-register" data-scan="vault-register" ${secret ? '' : 'hidden'} aria-labelledby="scan-register-heading">
           <div class="scan-head"><h2 id="scan-register-heading" tabindex="-1">ทะเบียนเอกสารที่สแกน</h2></div>
           <p class="scan-description" data-scan="summary"></p>
           <ul class="scan-records" data-scan="list"></ul>
         </section>
-        <details class="scan-card scan-bottom">
+        <details class="scan-card scan-bottom" ${secret ? 'hidden' : ''}>
           <summary>แคสทั้งหน้าจอ Xiaomi ไป Windows</summary>
           <p class="scan-description">บน Windows เปิดแอป Wireless Display จากการตั้งค่า ระบบ → การฉายภาพไปยังพีซีเครื่องนี้ หากยังไม่มีแอป ให้ติดตั้งจากคุณลักษณะเสริมก่อน</p>
           <p class="scan-description">บน Xiaomi เปิดศูนย์ควบคุม → แคสต์ (Cast) แล้วเลือกชื่อคอมพิวเตอร์ที่รองรับ Miracast</p>
           <a href="https://support.microsoft.com/en-gb/windows/hardware/display-graphics/screen-mirroring-and-projecting-to-your-pc-or-wireless-display" target="_blank" rel="noopener">คู่มือ Windows</a>
           <a href="https://www.mi.com/global/support/article/KA-36318/" target="_blank" rel="noopener">คู่มือ Xiaomi</a>
         </details>
-        <details class="scan-card scan-bottom">
+        <details class="scan-card scan-bottom" ${secret ? 'hidden' : ''}>
           <summary>โหมดทดลองสแกนจากเครื่องพิมพ์</summary>
           <p class="scan-description">แสดงข้อมูลตัวอย่างเพื่อทดสอบหน้าจอ</p>
           <button class="scan-button" type="button" data-scan="legacy">เปิดตัวอย่าง</button>
@@ -266,7 +286,7 @@
     if (secret) {
       state.find('pick').hidden = true;
       state.find('next').disabled = true;
-      label(state, 'เปิดกล้องเพื่ออนุญาตให้คอมพิวเตอร์ที่จับคู่เห็นภาพและกรอบ');
+      label(state, 'กรอกรหัสจากหน้าคอมก่อนเปิดกล้อง ภาพจะส่งเฉพาะเครื่องที่จับคู่สำเร็จ');
     }
     state.find('auto').onchange = () => {
       state.steadySince = 0;
@@ -279,18 +299,94 @@
       input.value = '';
     };
     state.find('legacy').onclick = () => window.doScan();
-    if (!secret) refreshList(state, true);
+    if (!secret) {
+      state.find('vault-lock').onclick = () => mount(root,user);
+      void setupVault(state);
+    }
+  }
+
+  async function setupVault(state) {
+    const message = state.find('vault-status'), form = state.find('vault-form');
+    const submit = state.find('vault-submit'), confirm = state.find('vault-confirm');
+    if (!window.FreshyVault || !crypto.subtle || !state.owner) {
+      message.textContent = 'คลังส่วนตัวต้องเปิดด้วย HTTPS และเข้าสู่ระบบก่อนใช้งาน';
+      return;
+    }
+    let config;
+    try { config = await records('readonly', store => store.get(state.owner), 'vaults'); }
+    catch { message.textContent = 'เปิดคลังในเบราว์เซอร์นี้ไม่ได้'; return; }
+    if (active !== state) return;
+    message.textContent = config ? 'กรอกรหัสผ่านเพื่อดูและบันทึกเอกสาร'
+      : 'ตั้งรหัสผ่านใหม่อย่างน้อย 12 ตัว ควรใช้วลีหลายคำ เก็บรหัสไว้เอง หากลืมจะเปิดไฟล์ที่เข้ารหัสไม่ได้';
+    form.hidden = false; confirm.hidden = !!config;
+    form.elements.confirmation.required = !config;
+    submit.textContent = config ? 'ปลดล็อกคลัง' : 'สร้างคลังส่วนตัว';
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (submit.disabled) return;
+      const passphrase = form.elements.passphrase.value;
+      if (!config && passphrase !== form.elements.confirmation.value) {
+        message.textContent = 'รหัสผ่านและช่องยืนยันไม่ตรงกัน'; return;
+      }
+      form.reset(); submit.disabled = true;
+      let key;
+      try {
+        if (config) key = await window.FreshyVault.unlock(config, passphrase);
+        else {
+          const created = await window.FreshyVault.create(state.owner, passphrase);
+          if (active !== state) return;
+          await records('readwrite', store => store.add(created.config), 'vaults');
+          config = created.config; key = created.key;
+        }
+        if (active !== state) return;
+        const old = (await records('readonly', store => store.index('owner').getAll(state.owner))).filter(item => !item.v && item.blob);
+        const migrated = [];
+        for (const item of old) migrated.push(await window.FreshyVault.encrypt(key,item));
+        if (active !== state) return;
+        if (migrated.length) await records('readwrite', store => { for (const item of migrated) store.put(item); });
+        if (active !== state) return;
+        state.vaultKey = key;
+        form.hidden = true;
+        state.find('vault-workspace').hidden = false;
+        state.find('vault-register').hidden = false;
+        state.find('vault-lock').hidden = false;
+        state.find('pair-toggle').disabled = false;
+        message.textContent = migrated.length ? 'ปลดล็อกแล้ว · เข้ารหัสรายการเดิม ' + migrated.length + ' รายการ'
+          : 'ปลดล็อกแล้ว · ไฟล์และข้อมูลทะเบียนเก็บแบบเข้ารหัสในเครื่องนี้';
+        await refreshList(state, true);
+      } catch {
+        if (active === state) {
+          message.textContent = key ? 'ยังเปิดคลังไม่ได้ การย้ายรายการเดิมอาจไม่สมบูรณ์ กรุณาลองอีกครั้ง'
+            : 'ปลดล็อกไม่ได้ กรุณาตรวจรหัสหรือเปิดหน้าสแกนใหม่';
+          if (config) { confirm.hidden = true; form.elements.confirmation.required = false; submit.textContent = 'ปลดล็อกคลัง'; }
+        }
+      } finally { submit.disabled = false; }
+    };
+  }
+
+  async function storePrivate(state, entry, insert = false) {
+    if (active !== state || !state.vaultKey) throw Error('Vault locked');
+    const sealed = await window.FreshyVault.encrypt(state.vaultKey, entry);
+    if (active !== state || !state.vaultKey) throw Error('Vault locked');
+    await records('readwrite', store => insert ? store.add(sealed) : store.put(sealed));
   }
 
   async function refreshList(state, restore = false) {
     try {
-      const items = await records('readonly', store => store.index('owner').getAll(state.owner));
+      if (!state.vaultKey) return;
+      const stored = await records('readonly', store => store.index('owner').getAll(state.owner));
+      const items = await Promise.all(stored.map(async sealed => ({
+        ...await window.FreshyVault.metadata(state.vaultKey, sealed), sealed
+      })));
+      const openItem = async ({sealed,...item}) => ({...item, blob:await window.FreshyVault.image(state.vaultKey,sealed)});
       if (active !== state) return;
       items.sort((a, b) => b.updatedAt - a.updatedAt);
       if (restore && !state.current && !state.stream && !state.busy) {
         const draft = items.find(item => !item.title);
         if (draft) {
-          showImage(state, draft, true);
+          const item = await openItem(draft);
+          if (active !== state) return;
+          if (!state.current && !state.stream && !state.busy) showImage(state, item, true);
           label(state, 'เปิดฉบับร่างล่าสุดแล้ว กรุณาตั้งชื่อเอกสาร', 'good');
         }
       }
@@ -312,12 +408,20 @@
         info.append(title, details);
         const buttons = document.createElement('div');
         buttons.className = 'scan-actions';
+        const withImage = action => async () => {
+          if (active !== state || !state.vaultKey || state.busy) return;
+          try {
+            const opened = await openItem(item);
+            if (active === state && state.vaultKey && !state.busy) await action(opened);
+          } catch {
+            if (active === state) label(state,'อ่านภาพเข้ารหัสไม่ได้','error');
+          }
+        };
+        const allowExport = () => window.confirm('ไฟล์ที่ดาวน์โหลดจะไม่ถูกเข้ารหัส กรุณาเก็บในเครื่องและโฟลเดอร์ส่วนตัว ต้องการดาวน์โหลดหรือไม่?');
         buttons.append(
-          button(item.title ? 'เปิด / แก้ไข' : 'เปิดฉบับร่าง', () => {
-            if (!state.busy) showImage(state, item, true);
-          }),
-          button('ภาพ JPG', () => download(item.blob, filename(item) + '.jpg')),
-          button('PDF', () => downloadPdf(state, item)),
+          button(item.title ? 'เปิด / แก้ไข' : 'เปิดฉบับร่าง', withImage(opened => showImage(state, opened, true))),
+          button('ภาพ JPG', withImage(opened => { if (allowExport()) download(opened.blob, filename(opened) + '.jpg'); })),
+          button('PDF', withImage(opened => { if (allowExport()) return downloadPdf(state, opened); })),
           button('ลบ', () => removeRecord(state, item))
         );
         row.append(info, buttons);
@@ -419,7 +523,7 @@
     };
     setBusy(state, true);
     try {
-      await records('readwrite', store => store.put(entry));
+      await storePrivate(state, entry);
       if (active !== state) return;
       state.current = entry;
       label(state, 'บันทึกเข้าทะเบียนสแกนบนเครื่องนี้แล้ว', 'good');
@@ -457,7 +561,7 @@
       const height = item.height * scale;
       pdf.addImage(new Uint8Array(await item.blob.arrayBuffer()), 'JPEG',
         (pageWidth - width) / 2, (pageHeight - height) / 2, width, height);
-      pdf.save(filename(item) + '.pdf');
+      if (active === state && state.vaultKey) pdf.save(filename(item) + '.pdf');
     } catch {
       if (active === state) label(state, 'สร้าง PDF ไม่สำเร็จ กรุณาลองใหม่หรือดาวน์โหลดภาพ JPG', 'error');
     }
@@ -508,7 +612,7 @@
       return;
     }
     try {
-      await records('readwrite', store => replacement ? store.put(entry) : store.add(entry));
+      await storePrivate(state, entry, !replacement);
     } catch {
       if (active !== state) return;
       showImage(state, entry, true, true);
@@ -552,7 +656,7 @@
         editCrop(state, file, null, true);
         return;
       }
-      await storeImage(state, cropPaper(raw, frame));
+      await storeImage(state, normalizePaper(cropPaper(raw, frame)));
       state.cropSource = file;
       state.cropPoints = normalizeCorners(frame);
     } catch {
@@ -567,7 +671,14 @@
   }
 
   async function startCamera(state) {
+    if (!state.secret && !state.vaultKey) return;
     if (state.busy) return;
+    const code = state.secret ? state.find('join-code').value : '';
+    if (state.secret && !window.FreshyPair.validCode(code)) {
+      state.find('join-code').focus();
+      label(state, 'กรุณากรอกรหัสจับคู่ 12 ตัวจากหน้าคอมก่อนเปิดกล้อง', 'error');
+      return;
+    }
     if (!navigator.mediaDevices?.getUserMedia) {
       label(state, 'กล้องต้องเปิดผ่าน HTTPS และเบราว์เซอร์ที่รองรับ หรือเลือกภาพจากเครื่อง', 'error');
       return;
@@ -604,10 +715,12 @@
         state.hold = false;
         state.pairReady = false;
         state.pair?.close();
-        state.pair = window.FreshyPair.join(state.secret, stream, {
+        state.pair = window.FreshyPair.join(state.secret, code, stream, {
           ready: () => {
             if (active !== state || !state.stream) return;
             state.pairReady = true;
+            state.find('join-code').value = '';
+            state.find('join-code').closest('label').hidden = true;
             state.lastCastStatus = null;
             state.pair?.send({ type: 'scan-mode', auto: state.find('auto').checked });
             state.find('view-source').textContent = 'กำลังแคสไปยังคอมพิวเตอร์';
@@ -672,6 +785,7 @@
   }
 
   function hostCamera(state) {
+    if (!state.secret && !state.vaultKey) return;
     if (state.busy) return;
     stopCamera(state);
     dismissCrop(state);
@@ -690,6 +804,8 @@
     state.find('auto').disabled = true;
     state.find('view-source').textContent = 'รอเชื่อมต่อมือถือ';
     state.find('start').hidden = true;
+    const pairCode = state.find('pair-code');
+    pairCode.hidden = true; pairCode.textContent = '';
     let stream;
     const showRemote = async () => {
       if (!stream || active !== state || !state.remote) return;
@@ -710,9 +826,11 @@
     };
     try {
       state.pair = window.FreshyPair.host({
-        link: async link => {
+        link: async (link, code) => {
           if (active !== state || !state.remote) return;
-          message.textContent = 'สแกน QR ด้วยมือถือ แล้วกดเปิดกล้อง · ลิงก์มีอายุประมาณ 3 นาที';
+          message.textContent = 'สแกน QR แล้วกรอกรหัสนี้บนมือถือ · ใช้ได้ประมาณ 3 นาที';
+          pairCode.textContent = code;
+          pairCode.hidden = false;
           copy.hidden = false;
           copy.onclick = async () => {
             try {
@@ -733,6 +851,7 @@
           if (active !== state || !state.remote) return;
           qr.hidden = true;
           copy.hidden = true;
+          pairCode.hidden = true; pairCode.textContent = '';
           state.find('monitor').hidden = false;
           state.find('pair-close').textContent = 'ตัดการเชื่อมต่อ';
           message.textContent = 'เชื่อมกล้องมือถือแล้ว สามารถดูกรอบและกดถ่ายจากคอมพิวเตอร์';
@@ -784,6 +903,7 @@
           if (active !== state || !state.remote) return;
           label(state, text, kind);
           message.textContent = text;
+          pairCode.hidden = true; pairCode.textContent = '';
           state.find('pair-close').textContent = 'ปิดแล้วลองใหม่';
           if (state.find('video').hidden) {
             qr.hidden = true;
@@ -957,7 +1077,14 @@
     ctx.clearRect(0, 0, width, height);
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = ready ? '#56e9a8' : '#b4d9f6';
-    const bounds = points || [{x:width*.1,y:height*.08},{x:width*.9,y:height*.08},
+    const last = canvas.scanGuide;
+    const display = points && last?.width === width && last?.height === height && last.points
+      ? points.map((p, i) => distance(p, last.points[i]) < 14
+        ? { x: last.points[i].x * .55 + p.x * .45, y: last.points[i].y * .55 + p.y * .45 }
+        : p)
+      : points;
+    canvas.scanGuide = { width, height, points: display };
+    const bounds = display || [{x:width*.1,y:height*.08},{x:width*.9,y:height*.08},
       {x:width*.9,y:height*.92},{x:width*.1,y:height*.92}];
     ctx.beginPath();
     ctx.rect(0, 0, width, height);
@@ -991,7 +1118,7 @@
       label(state, frame.issue || 'จัดเอกสารให้เห็นครบทั้ง 4 มุมและใช้พื้นหลังตัดกับกระดาษ');
       return;
     }
-    const stable = previous?.points && previous.width === frame.width && previous.height === frame.height &&
+    const stable = previous?.points && !previous.issue && previous.width === frame.width && previous.height === frame.height &&
       frame.points.every((point, i) => distance(point, previous.points[i]) < 4);
     let motion = 0;
     if (stable) {
@@ -1007,7 +1134,7 @@
     }
     if (!state.steadySince) state.steadySince = now;
     label(state, 'ภาพชัดแล้ว กรุณาถือโทรศัพท์ให้นิ่ง', 'good');
-    if (now - state.steadySince >= 700) takePhoto(state, true);
+    if (now - state.steadySince >= 900) takePhoto(state, true);
   }
 
   function normalizeCorners(frame) {
@@ -1020,6 +1147,36 @@
     return warpPaper(source, corners.map(p => ({
       x: p.x + (center.x - p.x) * .025, y: p.y + (center.y - p.y) * .025
     })));
+  }
+
+  // Lift paper shadows without binarizing stamps, pen marks or photographs.
+  function normalizePaper(canvas) {
+    const ctx = canvas.getContext('2d'), { width, height } = canvas;
+    const image = ctx.getImageData(0, 0, width, height), data = image.data;
+    const nx = 8, ny = 8, levels = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const values = [];
+      for (let y = Math.floor(j * height / ny); y < (j + 1) * height / ny; y += 5)
+        for (let x = Math.floor(i * width / nx); x < (i + 1) * width / nx; x += 5) {
+          const p = (y * width + x) * 4;
+          values.push(Math.min(data[p], data[p + 1], data[p + 2]));
+        }
+      values.sort((a, b) => a - b);
+      levels.push(Math.max(175, Math.min(250, values[Math.floor(values.length * .9)] ?? 250)));
+    }
+    for (let y = 0; y < height; y++) {
+      const ty = Math.max(0, Math.min(ny - 1, (y + .5) * ny / height - .5)), j = Math.floor(ty), fy = ty - j;
+      for (let x = 0; x < width; x++) {
+        const tx = Math.max(0, Math.min(nx - 1, (x + .5) * nx / width - .5)), i = Math.floor(tx), fx = tx - i;
+        const a = j * nx + i, b = j * nx + Math.min(i + 1, nx - 1);
+        const c = Math.min(j + 1, ny - 1) * nx + i, d = Math.min(j + 1, ny - 1) * nx + Math.min(i + 1, nx - 1);
+        const paper = (levels[a] * (1 - fx) + levels[b] * fx) * (1 - fy) + (levels[c] * (1 - fx) + levels[d] * fx) * fy;
+        const p = (y * width + x) * 4, gain = Math.min(1.28, 250 / paper);
+        for (let k = 0; k < 3; k++) data[p + k] = (data[p + k] - 8) * gain + 8;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+    return canvas;
   }
 
   function warpPaper(source, corners) {
@@ -1175,7 +1332,7 @@
         await editCrop(state, await jpeg(raw), null, true);
         return;
       }
-      await storeImage(state, cropPaper(raw, frame));
+      await storeImage(state, normalizePaper(cropPaper(raw, frame)));
       if (!state.secret) {
         state.cropSource = await jpeg(raw);
         state.cropPoints = normalizeCorners(frame);
@@ -1196,7 +1353,7 @@
   });
   window.addEventListener('pagehide', close);
   window.FreshyScanner = { mount, close };
-  const cameraLink = location.hash.match(/^#scan-camera=([A-Za-z0-9_-]{43})$/);
+  const cameraLink = location.hash.match(/^#scan-camera-v2=([A-Za-z0-9_-]{43})$/);
   if (cameraLink) {
     history.replaceState(null, '', location.pathname + location.search);
     const wrapper = document.createElement('main');

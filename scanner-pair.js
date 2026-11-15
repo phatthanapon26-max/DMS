@@ -4,6 +4,9 @@
   const decoder = new TextDecoder();
   const chunkSize = 16000;
   const maximumImage = 6_000_000;
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const cleanCode = code => String(code ?? '').toUpperCase().replace(/[\s-]/g, '');
+  const validCode = code => /^[A-HJ-NP-Z2-9]{12}$/.test(cleanCode(code));
 
   function encode(bytes) {
     return btoa(String.fromCharCode(...bytes)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
@@ -12,12 +15,16 @@
     return Uint8Array.from(atob(text.replaceAll('-', '+').replaceAll('_', '/')), char => char.charCodeAt(0));
   }
 
-  async function keys(secret) {
+  async function keys(secret, code) {
     const bytes = decode(secret);
-    if (bytes.length !== 32) throw new Error('Invalid pairing secret');
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    if (bytes.length !== 32 || !validCode(code)) throw new Error('Invalid pairing credentials');
+    const material = await crypto.subtle.importKey('raw', bytes, 'HKDF', false, ['deriveBits']);
+    const bits = label => crypto.subtle.deriveBits({
+      name: 'HKDF', hash: 'SHA-256', salt: encoder.encode(cleanCode(code)), info: encoder.encode(label)
+    }, material, 256);
+    const digest = await bits('freshy-pair-v2/room');
     const room = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
-    const key = await crypto.subtle.importKey('raw', bytes, 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const key = await crypto.subtle.importKey('raw', await bits('freshy-pair-v2/signal'), 'AES-GCM', false, ['encrypt', 'decrypt']);
     return { room, key };
   }
 
@@ -49,8 +56,8 @@
     return JSON.parse(decoder.decode(decoded));
   }
 
-  async function waitForSignal(keys, slot, abort) {
-    const deadline = Date.now() + 154000;
+  async function waitForSignal(keys, slot, abort, duration = 154000) {
+    const deadline = Date.now() + duration;
     while (!abort.aborted && Date.now() < deadline) {
       const description = await signal(keys, slot, 'GET', undefined, abort);
       if (description) return description;
@@ -182,19 +189,20 @@
 
   function host(events) {
     const secret = encode(crypto.getRandomValues(new Uint8Array(32)));
+    const code = Array.from(crypto.getRandomValues(new Uint8Array(12)), n => alphabet[n & 31]).join('');
     const link = new URL(location.origin);
-    link.hash = 'scan-camera=' + secret;
+    link.hash = 'scan-camera-v2=' + secret;
     const connection = connect(events);
     const { peer, abort } = connection;
     peer.addTransceiver('video', { direction: 'recvonly' });
     connection.configureChannel(peer.createDataChannel('freshy-camera'), true);
     (async () => {
       try {
-        const key = await keys(secret);
+        const key = await keys(secret, code);
         await peer.setLocalDescription(await peer.createOffer());
         await gather(peer, abort.signal);
         await signal(key, 'offer', 'POST', peer.localDescription, abort.signal);
-        events.link?.(link.toString());
+        events.link?.(link.toString(), code.match(/.{4}/g).join("-"));
         const answer = await waitForSignal(key, 'answer', abort.signal);
         await peer.setRemoteDescription(answer);
         await Promise.allSettled([
@@ -210,14 +218,14 @@
     return connection;
   }
 
-  function join(secret, stream, events) {
+  function join(secret, code, stream, events) {
     const connection = connect(events);
     const { peer, abort } = connection;
     peer.ondatachannel = event => connection.configureChannel(event.channel, false);
     (async () => {
       try {
-        const key = await keys(secret);
-        const offer = await waitForSignal(key, 'offer', abort.signal);
+        const key = await keys(secret, code);
+        const offer = await waitForSignal(key, 'offer', abort.signal, 12000);
         await peer.setRemoteDescription(offer);
         for (const track of stream.getVideoTracks()) peer.addTrack(track, stream);
         await peer.setLocalDescription(await peer.createAnswer());
@@ -225,12 +233,12 @@
         await signal(key, 'answer', 'POST', peer.localDescription, abort.signal);
       } catch {
         if (abort.signal.aborted) return;
-        events.status?.('เชื่อมต่อไม่ได้ กรุณาสแกน QR ใหม่จากคอมพิวเตอร์', 'error');
+        events.status?.('รหัสไม่ตรง ลิงก์หมดอายุ หรือเครือข่ายขัดข้อง กรุณาตรวจรหัสหรือสร้าง QR ใหม่', 'error');
         connection.close();
       }
     })();
     return connection;
   }
 
-  window.FreshyPair = { host, join };
+  window.FreshyPair = { host, join, validCode };
 })();

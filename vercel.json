@@ -1,16 +1,50 @@
 {
   "version": 2,
-  "regions": ["sin1"],
+  "regions": [
+    "sin1"
+  ],
   "builds": [
-    { "src": "index.html", "use": "@vercel/static" },
-    { "src": "workspace-ui.css", "use": "@vercel/static" },
-    { "src": "scanner*.{js,css}", "use": "@vercel/static" },
-    { "src": "api/scan-pair.js", "use": "@vercel/node" }
+    {
+      "src": "index.html",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "workspace-ui.css",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "scanner*.{js,css}",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/scan-pair.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/scan-bridge.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "/api/scan-pair", "dest": "/api/scan-pair.js" },
-    { "src": "/(scanner(?:-pair|-qr)?\\.(?:js|css))", "dest": "/$1" },
-    { "src": "/workspace-ui.css", "dest": "/workspace-ui.css" },
-    { "src": "/(.*)", "dest": "/index.html" }
+    {
+      "src": "/api/scan-pair",
+      "dest": "/api/scan-pair.js"
+    },
+    {
+      "src": "/api/scan-bridge",
+      "dest": "/api/scan-bridge.js"
+    },
+    {
+      "src": "/(scanner(?:-pair|-qr|-vault)?\\.(?:js|css))",
+      "dest": "/$1"
+    },
+    {
+      "src": "/workspace-ui.css",
+      "dest": "/workspace-ui.css"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
   ]
 }
