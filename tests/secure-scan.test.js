@@ -35,6 +35,23 @@ test('PDF bytes are separately encrypted and older scans still open',async()=>{
  await assert.rejects(FreshyVault.pdf(key,{...encrypted,pdf:encrypted.image}));
 });
 
+test('a signed PDF and its metadata are authenticated separately from the original scan',async()=>{
+ const {key}=await FreshyVault.create('alice','a random series of words');
+ const original={owner:'alice',id:'signed-test',title:'test',blob:new Blob(['initial jpeg']),pdfBlob:new Blob(['original pdf'])};
+ const core=await FreshyVault.encrypt(key,original);
+ assert.equal(await FreshyVault.signature(key,core),null);
+ const details={name:'ผู้ทดสอบ',by:'alice',at:1700000000000,sourceUpdatedAt:1699000000000};
+ const signed=await FreshyVault.sign(key,core,new Blob(['signed pdf']),details);
+ const record={...core,signed};
+ assert(!Buffer.from(signed.pdf.ciphertext).includes('signed pdf'));
+ assert.deepEqual(await FreshyVault.signature(key,record),details);
+ assert.equal(await (await FreshyVault.signedPdf(key,record)).text(),'signed pdf');
+ assert.equal(await (await FreshyVault.pdf(key,record)).text(),'original pdf');
+ assert.equal(await (await FreshyVault.image(key,record)).text(),'initial jpeg');
+ await assert.rejects(FreshyVault.signedPdf(key,{...record,id:'different-record'}));
+ await assert.rejects(FreshyVault.signedPdf(key,{...record,signed:{...signed,pdf:core.pdf}}));
+});
+
 test('QR secret and separate pairing code are jointly required to find and decrypt the offer',async()=>{
  const source=await readFile(new URL('../scanner-pair.js',import.meta.url),'utf8');
  const keyOnly=source.replace('window.FreshyPair = { host, join, validCode };','window.derive = keys; window.validCode = validCode;');
@@ -97,7 +114,7 @@ test('automatic scanner waits for an in-frame document, detail and 900 ms of sta
  const script=await readFile(new URL('../scanner.js',import.meta.url),'utf8');
  const instrumented=script.replace('if (now - state.steadySince >= 900) takePhoto(state, true);',
    'if (now - state.steadySince >= 900) capture();')
-   .replace('window.FreshyScanner = { mount, close };','window.frame = checkFrame;');
+   .replace(/window\.FreshyScanner = [^;]+;/,'window.frame = checkFrame;');
  let mode='clear',offset=0,t=1000, captures=0;
  const pixelContext={drawImage(){},getImageData(_x,_y,w,h){
   const data=new Uint8ClampedArray(w*h*4);

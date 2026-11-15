@@ -35,7 +35,7 @@
       "dest": "/api/scan-bridge.js"
     },
     {
-      "src": "/(scanner(?:-pair|-qr|-vault)?\\.(?:js|css))",
+      "src": "/(scanner(?:-pair|-qr|-vault|-sign)?\\.(?:js|css))",
       "dest": "/$1"
     },
     {

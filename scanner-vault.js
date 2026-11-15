@@ -51,5 +51,19 @@
     if (sealed.v !== 1 || !sealed.pdf) return null;
     return new Blob([await open(key,sealed.pdf,aad(sealed.owner,sealed.id,'pdf'))],{type:'application/pdf'});
   }
-  globalThis.FreshyVault = Object.freeze({create,unlock,encrypt,metadata,image,pdf});
+  async function sign(key, {owner,id}, signedPdf, details) {
+    const [meta,pdf] = await Promise.all([
+      seal(key,encoder.encode(JSON.stringify(details)),aad(owner,id,'signed-meta')),
+      signedPdf.arrayBuffer().then(bytes=>seal(key,bytes,aad(owner,id,'signed-pdf')))
+    ]);
+    return {meta,pdf};
+  }
+  async function signature(key,{owner,id,signed}) {
+    if (!signed) return null;
+    return JSON.parse(decoder.decode(await open(key,signed.meta,aad(owner,id,'signed-meta'))));
+  }
+  async function signedPdf(key,{owner,id,signed}) {
+    return new Blob([await open(key,signed.pdf,aad(owner,id,'signed-pdf'))],{type:'application/pdf'});
+  }
+  globalThis.FreshyVault = Object.freeze({create,unlock,encrypt,metadata,image,pdf,sign,signature,signedPdf});
 })();

@@ -11,6 +11,20 @@
   const sample = document.createElement('canvas');
   const sampleContext = sample.getContext('2d', { willReadFrequently: true });
   let active;
+  const viewTitles={scan:'ศูนย์สแกนเอกสาร',scanDrafts:'ฉบับร่างสแกน',scanLibrary:'ทะเบียนสแกน',
+    scanSign:'ลงนามเอกสาร',scanSettings:'ตั้งค่าการสแกน'};
+  const viewDescriptions={scan:'สแกน ตัดขอบ และลงทะเบียนเอกสาร',scanDrafts:'เปิดภาพที่สแกนค้างไว้ และบันทึกเข้าทะเบียน',
+    scanLibrary:'ค้นหาตามชื่อ เลขที่หนังสือ หรือตำแหน่งจัดเก็บ',scanSign:'เปิดเอกสารจากทะเบียน วาดลายเซ็น และบันทึก PDF ฉบับลงนาม',
+    scanSettings:'กำหนดค่าเริ่มต้นสำหรับบัญชีนี้ในเบราว์เซอร์ปัจจุบัน'};
+  const defaultPreferences={auto:true,contrast:true,paper:'a4'};
+  const preferencesKey=owner=>'freshy-scanner-preferences:'+owner;
+  function preferences(owner) {
+    try {
+      const saved=JSON.parse(localStorage.getItem(preferencesKey(owner)));
+      if (saved) return {auto:saved.auto!==false,contrast:saved.contrast!==false,paper:saved.paper==='a5'?'a5':'a4'};
+    } catch { /* Use defaults when device storage is unavailable. */ }
+    return {...defaultPreferences};
+  }
 
   function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -44,6 +58,10 @@
     const status = state.find('status');
     if (status.textContent !== message) status.textContent = message;
     status.dataset.kind = kind;
+    if(!state.secret&&state.view&&state.view!=='scan') {
+      const feedback=state.find('list-feedback');
+      feedback.textContent=message;feedback.dataset.kind=kind;
+    }
     if (state.secret && state.pairReady && state.lastCastStatus !== message + kind) {
       if (state.pair?.send({ type: 'scan-status', message, kind })) state.lastCastStatus = message + kind;
     }
@@ -73,7 +91,7 @@
       state.find('monitor').hidden = true;
       state.find('pair-panel').hidden = true;
       state.find('auto').disabled = false;
-      state.find('auto').checked = state.localAuto ?? true;
+      state.find('auto').checked = state.localAuto ?? state.preferences.auto;
     }
     state.find('shutter').hidden = true;
     state.find('register-jump').hidden = true;
@@ -91,6 +109,7 @@
 
   function close() {
     if (!active) return;
+    active.signer?.close();
     active.pair?.close();
     stopCamera(active);
     if (active.imageUrl) URL.revokeObjectURL(active.imageUrl);
@@ -105,26 +124,25 @@
     return ['year', 'month', 'day'].map(type => date.find(part => part.type === type).value).join('-');
   }
 
-  function mount(root, user, secret = null) {
+  function mount(root, user, secret = null, view = 'scan') {
     close();
     root.innerHTML = `
       <section class="scan-page ${secret ? 'scan-phone' : ''}" aria-labelledby="scan-heading">
         <header class="scan-banner">
           <div class="scan-banner-text"><small>FRESHY WATER <span></span> งานสารบรรณดิจิทัล</small>
-            <h1 id="scan-heading">${secret ? 'สแกนจากมือถือ' : 'ศูนย์สแกนเอกสาร'}</h1>
-            <p>${secret ? 'ภาพสแกนและกรอบจะแสดงบนคอมพิวเตอร์ที่เชื่อมอยู่' : 'สแกน ตัดขอบ และลงทะเบียนเอกสารในหน้าเดียว'}</p></div>
+            <h1 id="scan-heading">${secret ? 'สแกนจากมือถือ' : viewTitles[view]}</h1>
+            <p>${secret ? 'ภาพสแกนและกรอบจะแสดงบนคอมพิวเตอร์ที่เชื่อมอยู่' : viewDescriptions[view]}</p></div>
           <div class="scan-banner-art" aria-hidden="true"><i></i><i></i><b>${fileIcon}</b></div>
         </header>
         ${secret ? '' : `<nav class="scan-jump" aria-label="เมนูงานสแกน">
-          <a href="#scan-camera-heading" aria-current="true">${cameraIcon} สแกนเอกสาร</a>
-          <a href="#scan-register-heading">${fileIcon} ทะเบียนสแกน</a>
+          ${Object.entries(viewTitles).map(([key,title])=>`<button type="button" class="scan-button" data-scan-view="${key}">${key==='scan'?cameraIcon:''}${title}</button>`).join('')}
         </nav>`}
-        <section class="scan-cast-bar" ${secret ? 'hidden' : ''}>
+        <section class="scan-cast-bar" data-scan="cast-bar" ${secret ? 'hidden' : ''}>
           <div class="scan-cast-icon">${castIcon}</div>
           <div><h2>แคสหน้าสแกนขึ้นคอม</h2><p>ดูภาพสด กรอบสี่มุม และรูปหลังตัดขอบ</p></div>
           <button type="button" class="scan-button primary scan-connect" data-scan="pair-toggle" disabled ${secret ? 'hidden' : ''}>เชื่อมด้วย QR</button>
         </section>
-        ${secret ? '' : `<section class="scan-card scan-vault" aria-labelledby="scan-vault-heading">
+        ${secret ? '' : `<section class="scan-card scan-vault" data-scan="vault-card" aria-labelledby="scan-vault-heading">
           <div class="scan-head"><div><h2 id="scan-vault-heading">คลังสแกนส่วนตัว</h2>
           <p class="scan-description" data-scan="vault-status" role="status">กำลังตรวจคลังในเครื่องนี้</p></div>
           <button class="scan-button" type="button" data-scan="vault-lock" hidden>ล็อกคลังและปิดกล้อง</button></div>
@@ -204,10 +222,23 @@
             <p class="scan-note">ไฟล์และข้อมูลทะเบียนเข้ารหัสในเบราว์เซอร์เครื่องนี้ ไฟล์ JPG หรือ PDF ที่ดาวน์โหลดออกไปเป็นไฟล์ปกติ</p>
           </section>
         </div>
-        <section class="scan-card scan-register" data-scan="vault-register" ${secret ? '' : 'hidden'} aria-labelledby="scan-register-heading">
-          <div class="scan-head"><h2 id="scan-register-heading" tabindex="-1">ทะเบียนเอกสารที่สแกน</h2></div>
+        <section class="scan-card scan-register" data-scan="vault-register" hidden aria-labelledby="scan-register-heading">
+          <div class="scan-head"><h2 id="scan-register-heading" tabindex="-1">ทะเบียนเอกสารที่สแกน</h2><button class="scan-button" type="button" data-scan-view="scan">สแกนเอกสารใหม่</button></div>
+          <div class="scan-list-tools"><label class="scan-field">ค้นหา<input type="search" data-scan="query" placeholder="ชื่อ เลขที่ หรือตำแหน่งจัดเก็บ"></label>
+          <label class="scan-field" data-scan="signature-filter">สถานะ<select data-scan="sign-filter"><option value="">ทุกสถานะ</option><option value="unsigned">ยังไม่ลงนาม</option><option value="signed">ลงนามแล้ว</option></select></label></div>
+          <p class="scan-note" data-scan="list-feedback" role="status"></p>
           <p class="scan-description" data-scan="summary"></p>
           <ul class="scan-records" data-scan="list"></ul>
+        </section>
+        <section class="scan-card scan-preferences" data-scan="preferences" hidden>
+          <h2>ค่าเริ่มต้น</h2>
+          <form data-scan="preferences-form">
+            <label class="scan-pref-row"><span><b>ถ่ายอัตโนมัติ</b><small>ถ่ายเมื่อเห็นขอบกระดาษครบและภาพนิ่ง</small></span><input type="checkbox" name="auto" role="switch"></label>
+            <label class="scan-pref-row"><span><b>เพิ่มความคมชัดอัตโนมัติ</b><small>ปรับแสงและความคมชัดเมื่อพบขอบอัตโนมัติจากกล้องเครื่องนี้หรือภาพนำเข้า</small></span><input type="checkbox" name="contrast" role="switch"></label>
+            <label class="scan-field">ขนาดกระดาษ PDF<select name="paper"><option value="a4">A4</option><option value="a5">A5</option></select></label>
+            <div class="scan-actions"><button type="submit" class="scan-button primary">บันทึกการตั้งค่า</button><button type="button" class="scan-button" data-scan="preferences-reset">คืนค่าเริ่มต้น</button></div>
+            <p class="scan-note" data-scan="preferences-feedback" role="status"></p>
+          </form>
         </section>
         <details class="scan-card scan-bottom" ${secret ? 'hidden' : ''}>
           <summary>แคสทั้งหน้าจอ Xiaomi ไป Windows</summary>
@@ -225,10 +256,12 @@
       </section>`;
 
     const state = {
-      owner: String(user?.username || user?.id || ''), secret, cameraAttempt: 0, steadySince: 0,
+      owner: String(user?.username || user?.id || ''), user, root, secret, view, cameraAttempt: 0, steadySince: 0,
       find: name => root.querySelector(`[data-scan="${name}"]`)
     };
     active = state;
+    state.preferences = preferences(state.owner);
+    state.find('auto').checked = state.preferences.auto;
     state.find('form').elements.date.value = thaiDateInput();
     state.find('form').onsubmit = event => saveRecord(state, event);
     state.find('start').onclick = () => { if (state.remote) stopCamera(state); startCamera(state); };
@@ -262,16 +295,6 @@
       title.focus();
       title.scrollIntoView({ block: 'center' });
     };
-    for (const anchor of root.querySelectorAll('.scan-jump a')) {
-      anchor.onclick = event => {
-        event.preventDefault();
-        const target = root.querySelector(anchor.getAttribute('href'));
-        target.focus({ preventScroll: true });
-        target.scrollIntoView({ block: 'start' });
-        root.querySelector('.scan-jump [aria-current]')?.removeAttribute('aria-current');
-        anchor.setAttribute('aria-current', 'true');
-      };
-    }
     state.find('pair-toggle').onclick = () => hostCamera(state);
     state.find('pair-close').onclick = () => {
       stopCamera(state);
@@ -300,7 +323,32 @@
     };
     state.find('legacy').onclick = () => window.doScan();
     if (!secret) {
-      state.find('vault-lock').onclick = () => mount(root,user);
+      state.find('vault-lock').onclick = () => mount(root,user,null,state.view);
+      for (const button of root.querySelectorAll('[data-scan-view]')) button.onclick=()=>window.go(button.dataset.scanView);
+      state.find('query').oninput=()=>renderList(state);
+      state.find('sign-filter').onchange=()=>renderList(state);
+      state.signer=window.FreshyScanSign.create(root);
+      const form=state.find('preferences-form');
+      function fill(value) {
+        form.elements.auto.checked=value.auto;
+        form.elements.contrast.checked=value.contrast;
+        form.elements.paper.value=value.paper;
+      }
+      fill(state.preferences);
+      state.find('preferences-reset').onclick=()=>{
+        fill(defaultPreferences);
+        state.find('preferences-feedback').textContent='กดบันทึกเพื่อยืนยันการคืนค่า';
+      };
+      form.onsubmit=event=>{
+        event.preventDefault();
+        const value={auto:form.elements.auto.checked,contrast:form.elements.contrast.checked,paper:form.elements.paper.value};
+        try {
+          localStorage.setItem(preferencesKey(state.owner),JSON.stringify(value));
+          state.preferences=value;state.find('auto').checked=value.auto;
+          state.find('preferences-feedback').textContent='บันทึกการตั้งค่าแล้ว';
+        } catch {state.find('preferences-feedback').textContent='บันทึกการตั้งค่าในเบราว์เซอร์นี้ไม่ได้';}
+      };
+      switchView(view);
       void setupVault(state);
     }
   }
@@ -347,8 +395,7 @@
         if (active !== state) return;
         state.vaultKey = key;
         form.hidden = true;
-        state.find('vault-workspace').hidden = false;
-        state.find('vault-register').hidden = false;
+        syncView(state);
         state.find('vault-lock').hidden = false;
         state.find('pair-toggle').disabled = false;
         message.textContent = migrated.length ? 'ปลดล็อกแล้ว · เข้ารหัสรายการเดิม ' + migrated.length + ' รายการ'
@@ -364,11 +411,58 @@
     };
   }
 
+  function syncView(state) {
+    const {view,root}=state;
+    const capture=view==='scan';
+    const settings=view==='scanSettings';
+    const list=!capture&&!settings;
+    state.find('cast-bar').hidden=!capture;
+    state.find('vault-card').hidden=settings;
+    state.find('vault-workspace').hidden=!capture||!state.vaultKey;
+    state.find('vault-register').hidden=!list||!state.vaultKey;
+    state.find('preferences').hidden=!settings;
+    state.find('signature-filter').hidden=view!=='scanSign';
+    for (const details of root.querySelectorAll('.scan-bottom')) details.hidden=!capture;
+    for (const button of root.querySelectorAll('.scan-jump [data-scan-view]')) {
+      if (button.dataset.scanView===view) button.setAttribute('aria-current','page');
+      else button.removeAttribute('aria-current');
+    }
+    root.querySelector('#scan-heading').textContent=viewTitles[view];
+    root.querySelector('.scan-banner-text p').textContent=viewDescriptions[view];
+    root.querySelector('#scan-register-heading').textContent=viewTitles[view];
+    if (list&&state.vaultKey) renderList(state);
+  }
+  function switchView(view) {
+    const state=active;
+    if (!state||state.secret||!Object.hasOwn(viewTitles,view)) return false;
+    if (state.view!==view) {
+      state.signer?.close();
+      if (state.view==='scan') {
+        stopCamera(state);
+        if (state.current) showImage(state,state.current);
+      }
+      state.view=view;
+      state.find('query').value='';
+      state.find('list-feedback').textContent='';
+    }
+    syncView(state);
+    return true;
+  }
+
   async function storePrivate(state, entry, insert = false) {
     if (active !== state || !state.vaultKey) throw Error('Vault locked');
     const sealed = await window.FreshyVault.encrypt(state.vaultKey, entry);
     if (active !== state || !state.vaultKey) throw Error('Vault locked');
-    await records('readwrite', store => insert ? store.add(sealed) : store.put(sealed));
+    await records('readwrite', store => {
+      if (insert) return store.add(sealed);
+      const read=store.get(entry.id);
+      read.onsuccess=()=>{
+        const prior=read.result;
+        if (prior?.signed) sealed.signed=prior.signed;
+        store.put(sealed);
+      };
+      return read;
+    });
   }
 
   async function refreshList(state, restore = false) {
@@ -390,45 +484,123 @@
           label(state, 'เปิดฉบับร่างล่าสุดแล้ว กรุณาตั้งชื่อเอกสาร', 'good');
         }
       }
-      state.find('summary').textContent = items.length
-        ? items.length + ' รายการในเบราว์เซอร์นี้'
-        : 'ยังไม่มีรายการ ภาพแรกจะแสดงที่นี่หลังสแกน';
-      const list = state.find('list');
-      list.replaceChildren();
-      for (const item of items) {
-        const row = document.createElement('li');
-        row.className = 'scan-row';
-        const info = document.createElement('div');
-        info.className = 'scan-record-main';
-        const title = document.createElement('b');
-        title.textContent = item.title || 'ฉบับร่าง · รอตั้งชื่อ';
-        const details = document.createElement('span');
-        details.textContent = [item.number, item.location, item.date,
-          new Date(item.createdAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })].filter(Boolean).join(' · ');
-        info.append(title, details);
-        const buttons = document.createElement('div');
-        buttons.className = 'scan-actions';
-        const withImage = action => async () => {
-          if (active !== state || !state.vaultKey || state.busy) return;
-          try {
-            const opened = await openItem(item);
-            if (active === state && state.vaultKey && !state.busy) await action(opened);
-          } catch {
-            if (active === state) label(state,'อ่านภาพเข้ารหัสไม่ได้','error');
-          }
-        };
-        const allowExport = () => window.confirm('ไฟล์ที่ดาวน์โหลดจะไม่ถูกเข้ารหัส กรุณาเก็บในเครื่องและโฟลเดอร์ส่วนตัว ต้องการดาวน์โหลดหรือไม่?');
-        buttons.append(
-          button(item.title ? 'เปิด / แก้ไข' : 'เปิดฉบับร่าง', withImage(opened => showImage(state, opened, true))),
-          button('ภาพ JPG', withImage(opened => { if (allowExport()) download(opened.blob, filename(opened) + '.jpg'); })),
-          button('PDF', withImage(opened => { if (allowExport()) return downloadPdf(state, opened, item.sealed); })),
-          button('ลบ', () => removeRecord(state, item))
-        );
-        row.append(info, buttons);
-        list.append(row);
-      }
+      state.items=items;
+      renderList(state);
     } catch {
       if (active === state) state.find('summary').textContent = 'เปิดทะเบียนในเบราว์เซอร์นี้ไม่ได้';
+    }
+  }
+
+  function renderList(state) {
+    if (state.view==='scan'||state.view==='scanSettings') return;
+    const draft=state.view==='scanDrafts';
+    const signing=state.view==='scanSign';
+    const query=state.find('query').value.trim().toLocaleLowerCase('th');
+    const status=signing ? state.find('sign-filter').value : '';
+    const items=(state.items||[]).filter(item=>{
+      if (draft!==!item.title) return false;
+      if (status && (status==='signed')!==!!item.sealed.signed) return false;
+      return !query||[item.title,item.number,item.location,item.date].some(value=>String(value||'').toLocaleLowerCase('th').includes(query));
+    });
+    state.find('summary').textContent=items.length ? items.length+' รายการในเบราว์เซอร์นี้'
+      : query||status?'ไม่พบเอกสารตามตัวกรอง':draft?'ยังไม่มีฉบับร่าง':'ยังไม่มีเอกสารที่ลงทะเบียน';
+    const list=state.find('list');
+    list.replaceChildren();
+    for (const item of items) {
+      const row=document.createElement('li');
+      row.className='scan-row';
+      const info=document.createElement('div');
+      info.className='scan-record-main';
+      const title=document.createElement('b');
+      title.textContent=item.title||'ฉบับร่าง · รอตั้งชื่อ';
+      const details=document.createElement('span');
+      details.textContent=[item.number,item.location,item.date,
+        new Date(item.createdAt).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'})].filter(Boolean).join(' · ');
+      info.append(title,details);
+      if(item.sealed.signed){
+        const status=document.createElement('span');
+        status.className='scan-signed-badge';status.textContent='มี PDF ลงนาม';
+        info.append(status);
+      }
+      const buttons=document.createElement('div');
+      buttons.className='scan-actions';
+      const withImage=action=>async()=>{
+        if(active!==state||!state.vaultKey||state.busy) return;
+        try {
+          const {sealed,...data}=item;
+          const blob=await window.FreshyVault.image(state.vaultKey,sealed);
+          if(active===state&&state.vaultKey&&!state.busy) await action({...data,blob});
+        } catch {
+          if(active===state) label(state,'อ่านภาพเข้ารหัสไม่ได้','error');
+        }
+      };
+      if(!signing) {
+        buttons.append(button(draft?'เปิดฉบับร่าง':'เปิด / แก้ไข',withImage(opened=>{
+          window.go('scan');showImage(state,opened,true);
+        })));
+        if(!draft) buttons.append(button('JPG',withImage(opened=>{
+          if(allowExport())download(opened.blob,filename(opened)+'.jpg');
+        })));
+        buttons.append(button('PDF ต้นฉบับ',withImage(opened=>{
+          if(allowExport())return downloadPdf(state,opened,item.sealed);
+        })));
+      }
+      if(!draft) {
+        const action=item.sealed.signed ? button('PDF ลงนาม',()=>openSignedCopy(state,item))
+          : button('ลงนาม',withImage(opened=>state.signer.open(opened,state.user?.fullname||'',async(blob,name)=>{
+              await saveSignedCopy(state,item,opened,blob,name);
+            })));
+        if(signing) action.classList.add('primary');
+        buttons.append(action);
+      }
+      if(!signing) buttons.append(button('ลบ',()=>removeRecord(state,item)));
+      row.append(info,buttons);
+      list.append(row);
+    }
+  }
+
+  function allowExport() {
+    return window.confirm('ไฟล์ที่ดาวน์โหลดจะไม่ถูกเข้ารหัส กรุณาเก็บในเครื่องและโฟลเดอร์ส่วนตัว ต้องการดาวน์โหลดหรือไม่?');
+  }
+
+  async function saveSignedCopy(state,item,opened,blob,name) {
+    if(active!==state||!state.vaultKey) throw Error('กรุณาปลดล็อกคลังอีกครั้ง');
+    const pdf=await makePdf({...opened,blob});
+    const signed=await window.FreshyVault.sign(state.vaultKey,item.sealed,pdf,{name,by:state.owner,at:Date.now(),sourceUpdatedAt:item.updatedAt});
+    if(active!==state||!state.vaultKey) throw Error('กรุณาปลดล็อกคลังอีกครั้ง');
+    let changed=false;
+    await records('readwrite',store=>{
+      const read=store.get(item.id);
+      read.onsuccess=()=>{
+        const prior=read.result;
+        if(!prior||prior.owner!==state.owner||prior.signed||!prior.meta.iv.every((v,i)=>v===item.sealed.meta.iv[i])) {
+          changed=true;
+          return;
+        }
+        store.put({...prior,signed});
+      };
+      return read;
+    });
+    if(changed){
+      await refreshList(state);
+      throw Error('รายการนี้มีการเปลี่ยนแปลง กรุณาปิดแล้วเลือกเอกสารใหม่');
+    }
+    if(active===state){
+      label(state,'บันทึกไฟล์ PDF ลงนามแบบเข้ารหัสแล้ว','good');
+      await refreshList(state);
+    }
+  }
+
+  async function openSignedCopy(state,item) {
+    try {
+      const details=await window.FreshyVault.signature(state.vaultKey,item.sealed);
+      if(active!==state||!state.vaultKey) return;
+      const timestamp=new Date(details.at).toLocaleString('th-TH',{timeZone:'Asia/Bangkok'});
+      if(!window.confirm('ลงนามโดย '+details.name+' · '+timestamp+'\nดาวน์โหลดสำเนา PDF เป็นไฟล์ปกติหรือไม่?'))return;
+      const pdf=await window.FreshyVault.signedPdf(state.vaultKey,item.sealed);
+      if(active===state&&state.vaultKey) download(pdf,filename(item)+'-signed.pdf');
+    } catch {
+      if(active===state)label(state,'เปิดสำเนาที่ลงนามไม่ได้','error');
     }
   }
 
@@ -519,7 +691,7 @@
     }
     const entry = {
       ...state.current, title, location: fields.location.value.trim(),
-      number: fields.number.value.trim(), date: fields.date.value, updatedAt: Date.now()
+      number: fields.number.value.trim(), date: fields.date.value, paper:state.current.paper||(state.current.title?'a4':state.preferences.paper), updatedAt: Date.now()
     };
     setBusy(state, true);
     try {
@@ -554,7 +726,7 @@
 
   async function makePdf(item) {
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: item.width > item.height ? 'landscape' : 'portrait' });
+    const pdf = new jsPDF({ unit: 'pt', format: item.paper==='a5'?'a5':'a4', orientation: item.width > item.height ? 'landscape' : 'portrait' });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const scale = Math.min((pageWidth - 36) / item.width, (pageHeight - 36) / item.height);
@@ -664,7 +836,7 @@
         editCrop(state, file, null, true);
         return;
       }
-      await storeImage(state, normalizePaper(cropPaper(raw, frame)));
+      await storeImage(state, preparePaper(state,cropPaper(raw,frame)));
       state.cropSource = file;
       state.cropPoints = normalizeCorners(frame);
     } catch {
@@ -1158,6 +1330,10 @@
   }
 
   // Lift paper shadows without binarizing stamps, pen marks or photographs.
+  function preparePaper(state,canvas) {
+    return state.preferences.contrast ? normalizePaper(canvas) : canvas;
+  }
+
   function normalizePaper(canvas) {
     const ctx = canvas.getContext('2d'), { width, height } = canvas;
     const image = ctx.getImageData(0, 0, width, height), data = image.data;
@@ -1340,7 +1516,7 @@
         await editCrop(state, await jpeg(raw), null, true);
         return;
       }
-      await storeImage(state, normalizePaper(cropPaper(raw, frame)));
+      await storeImage(state, preparePaper(state,cropPaper(raw,frame)));
       if (!state.secret) {
         state.cropSource = await jpeg(raw);
         state.cropPoints = normalizeCorners(frame);
@@ -1360,7 +1536,7 @@
     }
   });
   window.addEventListener('pagehide', close);
-  window.FreshyScanner = { mount, close };
+  window.FreshyScanner = { mount, close, switchView };
   const cameraLink = location.hash.match(/^#scan-camera-v2=([A-Za-z0-9_-]{43})$/);
   if (cameraLink) {
     history.replaceState(null, '', location.pathname + location.search);
