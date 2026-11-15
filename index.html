@@ -231,6 +231,7 @@ tr:hover td{background:#eef4fb}
 }
 </style>
 <link rel="stylesheet" href="/scanner.css?v=cast-1">
+<link rel="stylesheet" href="/workspace-ui.css?v=1">
 <script defer src="/scanner-qr.js"></script>
 <script defer src="/scanner-pair.js?v=cast-1"></script>
 <script defer src="/scanner.js?v=cast-1"></script>
@@ -247,36 +248,52 @@ tr:hover td{background:#eef4fb}
 
 <!-- ============ PUBLIC LANDING ============ -->
 <div id="pubView">
-  <nav class="pub-nav">
+  <nav class="pub-nav" aria-label="เมนูหลัก">
     <div class="brand">
       <div class="seal">น้ำ</div>
       <div>ระบบจัดการกองคลังเอกสาร<small>โรงน้ำดื่ม เฟรชชี่ วอเตอร์</small></div>
     </div>
     <div class="links">
-      <button onclick="showPub('home')">หน้าหลัก</button>
-      <button onclick="showPub('manual')">คู่มือการใช้งาน</button>
+      <button data-public-view="home" aria-current="page" onclick="showPub('home')">หน้าหลัก</button>
+      <button data-public-view="manual" onclick="showPub('manual')">คู่มือ</button>
       <button class="primary" onclick="openLogin()">เข้าสู่ระบบ</button>
     </div>
   </nav>
 
   <div id="pubHome">
-    <div class="hero">
-      <h1>ระบบสารสนเทศโรงน้ำดื่ม เฟรชชี่ วอเตอร์</h1>
-      <p>ค้นหาและดูตัวอย่างเอกสารได้โดยไม่ต้องเข้าสู่ระบบ — สามารถดูและดาวน์โหลดเป็น PDF ได้เท่านั้น ไม่สามารถแก้ไขหรือลบไฟล์ได้</p>
-      <div class="search-bar">
-        <input id="pubSearch" placeholder="ค้นหาเอกสาร... เช่น บิลเงินสด, ใบส่งน้ำ, เลขที่เอกสาร" oninput="renderPubDocs()">
-        <button onclick="renderPubDocs()">ค้นหา</button>
+    <header class="hero">
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <div class="portal-label">FRESHY WATER <i></i> งานสารบรรณดิจิทัล</div>
+          <h1>คลังเอกสาร<br>เฟรชชี่ วอเตอร์</h1>
+          <p>ค้นหาหนังสือและเอกสาร หรือเข้าสู่ระบบเพื่อสแกน จัดเก็บ และลงทะเบียน</p>
+          <div class="portal-actions">
+            <button class="btn portal-white" onclick="openLogin('scan')">เริ่มสแกนเอกสาร</button>
+            <button class="btn portal-clear" onclick="focusPublicSearch()">ค้นหาในคลัง</button>
+          </div>
+        </div>
+        <div class="portal-art" aria-hidden="true">
+          <div class="portal-orbit"></div>
+          <div class="portal-sheet rear"></div>
+          <div class="portal-sheet middle"></div>
+          <div class="portal-sheet front"><i></i><b></b><b></b><b></b><span></span></div>
+          <div class="portal-scanner"><i></i><i></i><i></i><i></i><b></b></div>
+        </div>
       </div>
-    </div>
+    </header>
     <div class="pub-content">
-      <div class="panel">
-        <h3>รายการเอกสารล่าสุด (ดูได้อย่างเดียว)</h3>
+      <section class="panel portal-library" aria-labelledby="publicLibraryHeading">
+        <div class="section-heading"><h2 id="publicLibraryHeading">ค้นหาเอกสาร</h2><span id="publicResultCount" role="status"></span></div>
+        <form class="search-bar" onsubmit="event.preventDefault();renderPubDocs()">
+          <input type="search" id="pubSearch" aria-label="ค้นหาชื่อเรื่องหรือเลขที่หนังสือ" placeholder="ค้นหาชื่อเรื่องหรือเลขที่หนังสือ" oninput="queuePublicSearch()">
+          <button type="submit">ค้นหา</button>
+        </form>
         <div class="filters">
-          <select id="pubCat" onchange="renderPubDocs()"><option value="">ทุกประเภท</option></select>
-          <select id="pubFY" onchange="renderPubDocs()"><option value="">ทุกปีงบ</option><option>2567</option><option>2568</option><option>2569</option><option>2570</option></select>
+          <select id="pubCat" aria-label="ประเภทเอกสาร" onchange="renderPubDocs()"><option value="">ทุกประเภท</option></select>
+          <select id="pubFY" aria-label="ปีงบประมาณ" onchange="renderPubDocs()"><option value="">ทุกปีงบ</option><option>2567</option><option>2568</option><option>2569</option><option>2570</option></select>
         </div>
         <div id="pubDocsWrap"></div>
-      </div>
+      </section>
     </div>
   </div>
 
@@ -288,9 +305,9 @@ tr:hover td{background:#eef4fb}
           <p><b>1. ผู้ใช้ทั่วไป (สาธารณะ):</b> สามารถค้นหาเอกสาร ดูตัวอย่าง และดาวน์โหลดเป็น PDF ได้เท่านั้น ไม่สามารถแก้ไขหรือลบไฟล์ได้</p>
           <p><b>2. พนักงาน (Staff):</b> เข้าสู่ระบบเพื่ออัพโหลดเอกสาร สแกนเอกสาร จัดการเอกสารของตนเอง และดูข้อมูลทะเบียนพนักงาน</p>
           <p><b>3. ผู้ดูแลระบบ (Admin):</b> จัดการผู้ใช้ เอกสารทั้งหมด ทะเบียนพนักงาน ตั้งค่าระบบ และดูกราฟสรุปผล</p>
-          <p><b>4. การสแกนเอกสาร:</b> ระบบจะอ่านหัวข้ออัตโนมัติ (OCR) และจัดประเภทให้เอง ตั้งชื่อแฟ้มตาม ประเภท_เลขที่_วันที่</p>
+          <p><b>4. การสแกนเอกสาร:</b> เปิดกล้องให้เห็นขอบครบสี่มุม ระบบตัดขอบให้ก่อนตั้งชื่อและลงทะเบียน รองรับการแคสภาพจากมือถือด้วย QR</p>
           <p><b>5. เอกสารสำคัญ (ลับ):</b> จะต้องกรอกรหัสผ่านก่อนเปิดดูทุกครั้ง</p>
-          <p><b>6. ข้อมูลบันทึกลง Hard Disk ของเซิร์ฟเวอร์:</b> อัปเกรดระบบแล้วข้อมูลไม่หาย</p>
+          <p><b>6. ทะเบียนสแกน:</b> ฉบับร่างอยู่ในเบราว์เซอร์เครื่องที่รับภาพ สามารถดาวน์โหลด JPG หรือ PDF ได้</p>
         </div>
       </div>
     </div>
@@ -327,32 +344,33 @@ tr:hover td{background:#eef4fb}
       <div class="seal">น้ำ</div>
       <div class="sysname" id="sideSysName">ระบบจัดการกองคลังเอกสาร<small>โรงน้ำดื่ม เฟรชชี่ วอเตอร์</small></div>
     </div>
-    <nav class="side-menu" id="sideMenu"></nav>
+    <nav class="side-menu" id="sideMenu" aria-label="เมนูพื้นที่ทำงาน"></nav>
     <div class="side-foot">
       <div class="user-chip">
         <div class="av" id="userAv">A</div>
         <div class="info"><b id="userName">-</b><span id="userRole">-</span></div>
-        <button class="icon-btn" title="ออกจากระบบ" onclick="doLogout()" style="background:rgba(255,255,255,.15);color:#fff">ออก</button>
+        <button class="icon-btn" aria-label="ออกจากระบบ" title="ออกจากระบบ" onclick="doLogout()">ออก</button>
       </div>
     </div>
   </aside>
   <div class="main">
     <div class="topbar">
-      <button class="hamburger" onclick="toggleSidebar()">☰</button>
-      <h2 id="pageTitle">แดชบอร์ด</h2>
+      <button class="hamburger" id="menuToggle" aria-label="เปิดเมนู" aria-expanded="false" aria-controls="sidebar" onclick="toggleSidebar()">☰</button>
+      <h2 id="pageTitle" tabindex="-1">แดชบอร์ด</h2>
       <button class="notif-btn" onclick="openAnnouncements()">
         ประกาศ <span class="notif-badge" id="notifBadge" style="display:none">0</span>
       </button>
       <span class="net-status" id="netStatus">● ออนไลน์</span>
     </div>
-    <div class="content" id="content"></div>
+    <main class="content" id="content"></main>
+    <nav class="mobile-dock" id="mobileDock" aria-label="เมนูด่วน"></nav>
   </div>
 </div>
 
 <!-- Modal -->
 <div class="modal-mask" id="modalMask" onclick="if(event.target===this)closeModal()">
-  <div class="modal" id="modalBox">
-    <div class="modal-head" id="modalHead"><h3 id="modalTitle">หัวข้อ</h3><button class="x" onclick="closeModal()">×</button></div>
+  <div class="modal" id="modalBox" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-head" id="modalHead"><h3 id="modalTitle">หัวข้อ</h3><button type="button" class="x" aria-label="ปิดหน้าต่าง" onclick="closeModal()">×</button></div>
     <div class="modal-body" id="modalBody"></div>
     <div class="modal-foot" id="modalFoot"></div>
   </div>
@@ -510,19 +528,37 @@ function updateNet(){
 window.addEventListener('online',updateNet);window.addEventListener('offline',updateNet);
 
 /* ---------- Public views ---------- */
+let publicSearchTimer;
+let publicSearchVersion = 0;
+function queuePublicSearch(){
+  clearTimeout(publicSearchTimer);
+  publicSearchTimer = setTimeout(renderPubDocs, 240);
+}
+function focusPublicSearch(){
+  $('pubSearch').focus({preventScroll:true});
+  $('publicLibraryHeading').scrollIntoView({block:'start'});
+}
 function showPub(v){
+  document.querySelectorAll('[data-public-view]').forEach(button=>{
+    if(button.dataset.publicView===v)button.setAttribute('aria-current','page');
+    else button.removeAttribute('aria-current');
+  });
   $('pubHome').style.display=v==='home'?'block':'none';
   $('pubManual').style.display=v==='manual'?'block':'none';
   window.scrollTo(0,0);
 }
 async function renderPubDocs(){
+  clearTimeout(publicSearchTimer);
+  const revision = ++publicSearchVersion;
   const docs=await API.get('/docs');
+  if(revision!==publicSearchVersion)return;
   const q=($('pubSearch').value||'').toLowerCase();
   const cat=$('pubCat').value, fy=$('pubFY').value;
   // populate category filter once
   if(!$('pubCat').dataset.filled){const cats=[...new Set(docs.map(d=>d.category))];$('pubCat').innerHTML='<option value="">ทุกประเภท</option>'+cats.map(c=>`<option>${esc(c)}</option>`).join('');$('pubCat').dataset.filled=1}
   let list=docs.filter(d=>(!q||(d.subject+' '+d.docNo+' '+d.category).toLowerCase().includes(q))&&(!cat||d.category===cat)&&(!fy||String(d.fiscalYear)===fy));
   list.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+  $('publicResultCount').textContent = 'พบ ' + list.length.toLocaleString('th-TH') + ' รายการ';
   $('pubDocsWrap').innerHTML=`<div class="table-wrap"><table><thead><tr>
     <th>ลำดับที่</th><th>วันที่แก้ไขล่าสุด</th><th>เลขเอกสาร</th><th>ชื่อเอกสาร</th><th>ประเภท</th><th>ตัวอย่าง</th></tr></thead><tbody>
     ${list.length?list.map((d,i)=>`<tr>
@@ -548,26 +584,52 @@ async function pubPreview(id){
 function pubDownload(id){API.get('/docs').then(docs=>{const d=docs.find(x=>x.id===id);const f=(d?.files||[])[0];if(f&&(f.url||f.data)){const a=document.createElement('a');a.href=f.url||f.data;a.download=f.name;a.click()}else Swal.fire({icon:'info',title:'ไม่มีไฟล์แนบ'})})}
 
 /* ---------- Login ---------- */
-function openLogin(){
-  openModal('เข้าสู่ระบบ',`<div class="fg"><label>ชื่อผู้ใช้งาน (Username)</label><input id="loginUser" placeholder="admin / staff"></div>
-  <div class="fg"><label>รหัสผ่าน (Password)</label><input id="loginPass" type="password" placeholder="••••••••"></div>
-  ${localStorage.getItem('pwd_changed')?'':'<div class="text-muted">Admin: admin/admin123 · Staff: staff/staff123</div>'}
-  <div class="text-muted mt" id="connStatus" style="color:#0f7d56;font-weight:600"></div>
-  <div class="text-muted mt" style="color:#1a3f6f">Admin สามารถวาง Supabase URL/Key ได้ในหน้าตั้งค่า → ฐานข้อมูล/API (ไม่ต้องแก้โค้ด)</div>`,
-  [{t:'เข้าสู่ระบบ',cls:'btn-primary',fn:doLogin}]);
-  if($('connStatus'))$('connStatus').textContent=sb?'● เชื่อมต่อ Supabase แล้ว (ฐานข้อมูลกลาง แชร์ข้ามเครื่อง)':'● โหมดเบราว์เซอร์ (ยังไม่เชื่อม Supabase — วาง URL/Key ในโค้ด)';
-  setTimeout(()=>$('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin()}),50);
+let loginNext = 'dashboard';
+function openLogin(next='dashboard'){
+  loginNext=next;
+  openModal('เข้าสู่ระบบ',`<form id="portalLoginForm">
+    <p class="auth-note">เข้าสู่พื้นที่ทำงานของเฟรชชี่ วอเตอร์ด้วยบัญชีที่ได้รับ</p>
+    <div class="fg"><label for="loginUser">ชื่อผู้ใช้</label><input id="loginUser" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="กรอกชื่อผู้ใช้" required></div>
+    <div class="fg"><label for="loginPass">รหัสผ่าน</label>
+      <div class="auth-password"><input id="loginPass" autocomplete="current-password" type="password" placeholder="กรอกรหัสผ่าน" required>
+      <button type="button" id="loginReveal" aria-pressed="false">แสดง</button></div></div>
+    <p id="loginFeedback" class="auth-feedback" role="alert" hidden></p>
+    <button type="submit" class="btn btn-primary auth-submit">เข้าสู่ระบบ</button>
+    <p class="auth-help">ลืมชื่อผู้ใช้หรือรหัสผ่าน ติดต่อผู้ดูแลระบบ</p>
+  </form>`,[]);
+  $('modalBox').classList.add('auth-modal');
+  $('portalLoginForm').onsubmit=event=>{event.preventDefault();doLogin()};
+  $('loginReveal').onclick=event=>{
+    const password=$('loginPass');
+    const visible=password.type==='password';
+    password.type=visible?'text':'password';
+    event.currentTarget.textContent=visible?'ซ่อน':'แสดง';
+    event.currentTarget.setAttribute('aria-pressed',String(visible));
+  };
+  $('loginUser').focus();
 }
 async function doLogin(){
   const u=$('loginUser').value.trim(),p=$('loginPass').value;
   if(!u||!p)return Swal.fire({icon:'warning',title:'กรุณากรอกข้อมูล',confirmButtonColor:'#1a3f6f'});
-  showSpin(true);
+  const form=$('portalLoginForm');
+  const submit=form.querySelector('[type="submit"]');
+  if(submit.disabled)return;
+  $('loginFeedback').hidden=true;
+  submit.disabled=true;
+  submit.textContent='กำลังเข้าสู่ระบบ…';
   let user=null;
   if(sb){try{const{data}=await sb.from('users').select('*').eq('username',u).eq('password',p).limit(1);if(data&&data[0])user=data[0]}catch(e){}}
   if(!user){try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});if(r.ok){const j=await r.json();user=j.user}}catch(e){}}
   if(!user){const d=lsDB();user=d.users.find(x=>x.username===u&&x.password===p)}
-  showSpin(false);
-  if(!user)return Swal.fire({icon:'error',title:'เข้าสู่ระบบไม่สำเร็จ',text:'Username หรือ Password ไม่ถูกต้อง',confirmButtonColor:'#1a3f6f'});
+  if(!form.isConnected||!$('modalMask').classList.contains('show'))return;
+  submit.disabled=false;
+  submit.textContent='เข้าสู่ระบบ';
+  if(!user){
+    $('loginFeedback').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาตรวจสอบแล้วลองใหม่';
+    $('loginFeedback').hidden=false;
+    $('loginPass').focus();
+    return;
+  }
   SESSION=user;
   try{const log={at:new Date().toISOString(),username:user.username,fullname:user.fullname,role:user.role};if(sb){await sb.from('login_logs').insert(log)}else{const d=lsDB();d.login_logs=d.login_logs||[];d.login_logs.push(log);lsSave(d)}}catch(e){}
   closeModal();
@@ -576,16 +638,25 @@ async function doLogin(){
   $('userRole').textContent=(user.role==='Admin'?'ผู้ดูแลระบบ':'พนักงาน')+' · '+user.department;
   SETTINGS=await API.get('/settings');
   if(SETTINGS&&SETTINGS.systemName)$('sideSysName').innerHTML=esc(SETTINGS.systemName)+'<small>'+esc(SETTINGS.orgName||'โรงน้ำดื่ม เฟรชชี่ วอเตอร์')+'</small>';
-  buildMenu();go('dashboard');updateNotifBadge();
-  Swal.fire({icon:'success',title:'ยินดีต้อนรับ',text:user.fullname,timer:1200,showConfirmButton:false});
+  buildMenu();go(loginNext);updateNotifBadge();
 }
 function doLogout(){
   Swal.fire({title:'ยืนยันออกจากระบบ?',icon:'question',showCancelButton:true,confirmButtonText:'ออกจากระบบ',cancelButtonText:'ยกเลิก',confirmButtonColor:'#1a3f6f'}).then(r=>{
-    if(r.isConfirmed){window.FreshyScanner?.close();SESSION=null;$('appView').classList.remove('show');$('pubView').style.display='block';showPub('home');renderPubDocs()}
+    if(r.isConfirmed){window.FreshyScanner?.close();SESSION=null;delete document.body.dataset.workspaceView;setSidebar(false);$('appView').classList.remove('show');$('pubView').style.display='block';showPub('home');renderPubDocs()}
   });
 }
 
 /* ---------- Menu & Routing ---------- */
+const workspaceIcons = {
+  dashboard:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  scan:'<path d="M9 4H4v5m11-5h5v5m0 6v5h-5m-6 0H4v-5M7 12h10"/>',
+  docs:'<path d="M4 6h6l2 2h8v11H4z"/>',
+  profile:'<circle cx="12" cy="8" r="3"/><path d="M5 20v-2a7 7 0 0 1 14 0v2"/>',
+  menu:'<path d="M5 6h14M5 12h14M5 18h14"/>'
+};
+function workspaceIcon(name){
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${workspaceIcons[name]||workspaceIcons.docs}</svg>`;
+}
 function buildMenu(){
   const isAdmin=SESSION.role==='Admin';
   const items=[
@@ -603,16 +674,37 @@ function buildMenu(){
     {id:'users',ic:'☺',label:'จัดการผู้ใช้งาน',admin:true},
     {id:'settings',ic:'✦',label:'ตั้งค่าระบบ',admin:true},
   ];
-  $('sideMenu').innerHTML=items.map(x=>x.sec?`<div class="side-sec">${x.sec}</div>`:`<div class="side-item" data-view="${x.id}" onclick="go('${x.id}')"><span class="ic">${x.ic}</span>${x.label}</div>`).join('');
+  $('sideMenu').innerHTML=items.map(x=>x.sec
+    ? `<div class="side-sec">${x.sec}</div>`
+    : `<button type="button" class="side-item" data-view="${x.id}" onclick="go('${x.id}')">${workspaceIcon(x.id)}<span>${x.label}</span></button>`).join('');
+  $('mobileDock').innerHTML=[['dashboard','ภาพรวม'],['scan','สแกน'],['docs','คลังเอกสาร']].map(([id,label])=>
+    `<button type="button" data-view="${id}" onclick="go('${id}')">${workspaceIcon(id)}<span>${label}</span></button>`).join('')
+    + `<button type="button" data-more aria-expanded="false" aria-controls="sidebar" onclick="toggleSidebar()">${workspaceIcon('menu')}<span>เมนู</span></button>`;
 }
-function toggleSidebar(){$('sidebar').classList.toggle('open');$('overlay').classList.toggle('show')}
+function setSidebar(open){
+  $('sidebar').classList.toggle('open',open);
+  $('overlay').classList.toggle('show',open);
+  $('menuToggle').setAttribute('aria-expanded',String(open));
+  $('mobileDock').querySelector('[data-more]')?.setAttribute('aria-expanded',String(open));
+}
+function toggleSidebar(){setSidebar(!$('sidebar').classList.contains('open'))}
 async function go(view){
-  window.FreshyScanner?.close();
+  if(!SESSION)return;
+  if(currentView!==view||view!=='scan'||!$('content').querySelector('.scan-page'))window.FreshyScanner?.close();
+  else { setSidebar(false); return; }
   currentView=view;
-  document.querySelectorAll('.side-item').forEach(el=>el.classList.toggle('active',el.dataset.view===view));
-  if(window.innerWidth<=900){$('sidebar').classList.remove('open');$('overlay').classList.remove('show')}
-  const T={dashboard:'แดชบอร์ด',scan:'สแกนเอกสาร',docs:SESSION.role==='Admin'?'สรุปรายการเอกสารทั้งหมด':'จัดการเอกสารของฉัน',hr:'ระบบทะเบียนพนักงาน — ภาพรวม',hrmgr:'จัดการข้อมูลพนักงาน',hrphoto:'จัดการรูปพนักงาน',hrchart:'กราฟแสดงผล',profile:'แก้ไขข้อมูลส่วนตัว',users:'จัดการผู้ใช้งาน',settings:'ตั้งค่าระบบ'};
+  document.querySelectorAll('#appView [data-view]').forEach(el=>{
+    const selected=el.dataset.view===view;
+    el.classList.toggle('active',selected);
+    if(selected)el.setAttribute('aria-current','page');
+    else el.removeAttribute('aria-current');
+  });
+  setSidebar(false);
+  document.body.dataset.workspaceView=view;
+  window.scrollTo(0,0);
+  const T={dashboard:'ภาพรวมงานสารบรรณ',scan:'สแกนเอกสาร',docs:SESSION.role==='Admin'?'สรุปรายการเอกสารทั้งหมด':'จัดการเอกสารของฉัน',hr:'ระบบทะเบียนพนักงาน — ภาพรวม',hrmgr:'จัดการข้อมูลพนักงาน',hrphoto:'จัดการรูปพนักงาน',hrchart:'กราฟแสดงผล',profile:'แก้ไขข้อมูลส่วนตัว',users:'จัดการผู้ใช้งาน',settings:'ตั้งค่าระบบ'};
   $('pageTitle').textContent=T[view];
+  $('pageTitle').focus({preventScroll:true});
   if(view==='dashboard')renderDashboard();
   else if(view==='scan')renderScan();
   else if(view==='docs')renderDocs();
@@ -627,19 +719,32 @@ async function go(view){
 
 /* ==================== DASHBOARD ==================== */
 async function renderDashboard(){
-  const docs=await API.get('/docs');const users=await API.get('/users');
-  const isAdmin=SESSION.role==='Admin';
+  const account=SESSION;
+  $('content').innerHTML=`<section class="workspace-welcome">
+    <div><div class="portal-label">FRESHY WATER <i></i> งานสารบรรณดิจิทัล</div>
+      <h1>ภาพรวมคลังเอกสาร</h1><p>${esc(account.fullname)} · ${esc(account.department)}</p>
+      <div class="portal-actions">
+        <button type="button" class="btn portal-white" onclick="go('scan')">${workspaceIcon('scan')} สแกนเอกสาร</button>
+        <button type="button" class="btn portal-clear" onclick="go('docs')">${workspaceIcon('docs')} เปิดคลังเอกสาร</button>
+      </div>
+    </div><div class="welcome-mark" aria-hidden="true">${workspaceIcon('docs')}</div>
+  </section><div id="dashboardReport" aria-busy="true"><p class="panel workspace-loading" role="status">กำลังโหลดภาพรวม…</p></div>`;
+  const report=$('dashboardReport');
+  const [docs,users]=await Promise.all([API.get('/docs'),API.get('/users')]);
+  if(!report.isConnected||account!==SESSION||currentView!=='dashboard')return;
+  const isAdmin=account.role==='Admin';
   const myDocs=isAdmin?docs:docs.filter(d=>d.ownerId===SESSION.id);
   const byCat={};docs.forEach(d=>byCat[d.category]=(byCat[d.category]||0)+1);
   const byFY={};docs.forEach(d=>byFY[d.fiscalYear]=(byFY[d.fiscalYear]||0)+1);
-  const fyText=Object.entries(byFY).map(([k,v])=>`ปี ${k}: ${v}`).join(' · ')||'-';
-  $('content').innerHTML=`
+  const fyText=Object.entries(byFY).map(([k,v])=>`ปี ${esc(k)}: ${v}`).join(' · ')||'-';
+  report.setAttribute('aria-busy','false');
+  report.innerHTML=`
     <div class="stats-grid">
       <div class="stat-card"><div class="lbl">จำนวนเอกสารทั้งหมด</div><div class="num">${docs.length}</div><div class="sub">ฉบับในคลัง</div></div>
       <div class="stat-card gold"><div class="lbl">จำนวนประเภทเอกสาร</div><div class="num">${Object.keys(byCat).length}</div><div class="sub">หมวดหมู่</div></div>
       <div class="stat-card green"><div class="lbl">จำนวนผู้ใช้งาน</div><div class="num">${users.length}</div><div class="sub">คนในระบบ</div></div>
       ${isAdmin?`<div class="stat-card red"><div class="lbl">แยกตามปีงบประมาณ</div><div class="num" style="font-size:13px;line-height:1.5">${fyText}</div></div>`
-      :`<div class="stat-card red"><div class="lbl">เอกสารของฉัน</div><div class="num">${myDocs.length}</div><div class="sub">My Documents</div></div>`}
+      :`<div class="stat-card red"><div class="lbl">เอกสารของฉัน</div><div class="num">${myDocs.length}</div><div class="sub">ฉบับที่รับผิดชอบ</div></div>`}
     </div>
     <div class="panel"><h3 style="display:block">จำนวนเอกสารแยกตามหมวดหมู่</h3><div class="chart-wrap"><canvas id="catChart"></canvas></div></div>`;
   setTimeout(()=>{const ctx=$('catChart');if(!ctx)return;if(chartInst)chartInst.destroy();
@@ -656,27 +761,38 @@ async function renderDocs(){
   $('content').innerHTML=`<div class="panel">
     <div class="flex-between mb"><h3 style="margin:0;display:inline-block">${isAdmin?'สรุปรายการเอกสารทั้งหมด':'เอกสารของฉัน'}</h3><button class="btn btn-primary" onclick="openDocForm()">+ เพิ่มเอกสาร</button></div>
     <div class="filters">
-      <div><label class="text-muted">จากวันที่</label><input type="date" onchange="docFilter.from=this.value;renderDocTable()"></div>
-      <div><label class="text-muted">ถึงวันที่</label><input type="date" onchange="docFilter.to=this.value;renderDocTable()"></div>
-      <div><label class="text-muted">ประเภทเอกสาร</label><select onchange="docFilter.cat=this.value;renderDocTable()"><option value="">ทั้งหมด</option>${(SETTINGS?.categories||[]).map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
-      <div><label class="text-muted">ปีงบประมาณ</label><select onchange="docFilter.fy=this.value;renderDocTable()"><option value="">ทั้งหมด</option><option>2567</option><option>2568</option><option>2569</option><option>2570</option></select></div>
-      <div><label class="text-muted">ค้นหาเรื่อง/ผู้รับผิดชอบ</label><input placeholder="พิมพ์ค้นหา..." oninput="docFilter.q=this.value;renderDocTable()"></div>
+      <div><label for="docsFrom">จากวันที่</label><input id="docsFrom" type="date" value="${esc(docFilter.from)}" onchange="docFilter.from=this.value;renderDocTable()"></div>
+      <div><label for="docsTo">ถึงวันที่</label><input id="docsTo" type="date" value="${esc(docFilter.to)}" onchange="docFilter.to=this.value;renderDocTable()"></div>
+      <div><label for="docsCategory">ประเภทเอกสาร</label><select id="docsCategory" onchange="docFilter.cat=this.value;renderDocTable()"><option value="">ทั้งหมด</option>${(SETTINGS?.categories||[]).map(c=>`<option>${esc(c)}</option>`).join('')}</select></div>
+      <div><label for="docsYear">ปีงบประมาณ</label><select id="docsYear" onchange="docFilter.fy=this.value;renderDocTable()"><option value="">ทั้งหมด</option><option>2567</option><option>2568</option><option>2569</option><option>2570</option></select></div>
+      <div><label for="docsQuery">ค้นหาเอกสาร</label><input id="docsQuery" type="search" placeholder="ชื่อเรื่อง เลขที่ หรือผู้รับผิดชอบ" value="${esc(docFilter.q)}" oninput="docFilter.q=this.value;queueDocSearch()"></div>
     </div>
     <div id="docTableWrap"></div></div>`;
+  $('docsCategory').value=docFilter.cat;
+  $('docsYear').value=docFilter.fy;
   renderDocTable();
 }
+let docTableVersion=0, docSearchTimer;
+function queueDocSearch(){
+  clearTimeout(docSearchTimer);
+  docSearchTimer=setTimeout(renderDocTable,230);
+}
 async function renderDocTable(){
-  const isAdmin=SESSION.role==='Admin';
-  let docs=await API.get('/docs');const users=await API.get('/users');
-  if(!isAdmin)docs=docs.filter(d=>d.ownerId===SESSION.id);
+  const account=SESSION;
+  const table=$('docTableWrap');
+  if(!table||!account)return;
+  const version=++docTableVersion;
+  const [allDocs,users]=await Promise.all([API.get('/docs'),API.get('/users')]);
+  if(!table.isConnected||account!==SESSION||currentView!=='docs'||version!==docTableVersion)return;
+  let docs=account.role==='Admin'?allDocs:allDocs.filter(d=>d.ownerId===account.id);
   const f=docFilter;
   if(f.from)docs=docs.filter(d=>d.signDate>=f.from);
   if(f.to)docs=docs.filter(d=>d.signDate<=f.to);
   if(f.cat)docs=docs.filter(d=>d.category===f.cat);
   if(f.fy)docs=docs.filter(d=>String(d.fiscalYear)===f.fy);
-  if(f.q){const q=f.q.toLowerCase();docs=docs.filter(d=>{const o=users.find(u=>u.id===d.ownerId);return (d.subject||'').toLowerCase().includes(q)||(o&&o.fullname.toLowerCase().includes(q))})}
+  if(f.q){const q=f.q.trim().toLowerCase();docs=docs.filter(d=>{const o=users.find(u=>u.id===d.ownerId);return [d.subject,d.docNo,o?.fullname].some(value=>String(value||'').toLowerCase().includes(q))})}
   docs.sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
-  $('docTableWrap').innerHTML=`<div class="table-wrap"><table><thead><tr>
+  table.innerHTML=`<div class="table-wrap"><table><thead><tr>
     <th>ที่</th><th>เลขที่หนังสือ</th><th>วันที่ลงนาม</th><th>เรื่อง</th><th>ประเภท</th><th>หน่วยงาน/ฝ่าย</th><th>ผู้รับผิดชอบ</th><th>ไฟล์แนบ</th><th>จัดการ</th></tr></thead><tbody>
     ${docs.length?docs.map((d,i)=>{const o=users.find(u=>u.id===d.ownerId)||{};return `<tr>
       <td>${i+1}</td><td style="font-family:monospace;font-weight:600">${esc(d.docNo)}</td><td>${fmtDate(d.signDate)}</td>
@@ -1220,7 +1336,10 @@ async function saveSettings(keys){
 }
 
 /* ==================== Modal Helper ==================== */
+let modalOrigin;
 function openModal(title,bodyHTML,footers,gold){
+  if(!$('modalMask').classList.contains('show'))modalOrigin=document.activeElement;
+  $('modalBox').classList.remove('auth-modal');
   $('modalTitle').textContent=title;
   $('modalHead').classList.toggle('gold',!!gold);
   $('modalBody').innerHTML=bodyHTML;
@@ -1228,8 +1347,21 @@ function openModal(title,bodyHTML,footers,gold){
   $('modalFoot').innerHTML=ft.map((f,i)=>`<button class="btn ${f.cls}" data-fidx="${i}">${f.t}</button>`).join('');
   $('modalFoot').querySelectorAll('button').forEach((b,i)=>b.onclick=ft[i]?.fn||closeModal);
   $('modalMask').classList.add('show');
+  $('modalBox').querySelector('.x').focus();
 }
-function closeModal(){$('modalMask').classList.remove('show')}
+function closeModal(){
+  $('modalMask').classList.remove('show');
+  if(modalOrigin?.isConnected)modalOrigin.focus({preventScroll:true});
+}
+$('modalMask').addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();closeModal();return}
+  if(event.key!=='Tab')return;
+  const controls=[...$('modalBox').querySelectorAll('button:not(:disabled),input:not(:disabled),select,textarea,a[href]')]
+    .filter(element=>element.getClientRects().length&&element.tabIndex>=0);
+  const first=controls[0],last=controls.at(-1);
+  if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus()}
+  if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus()}
+});
 
 /* ==================== Init ==================== */
 (async function init(){
